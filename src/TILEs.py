@@ -22,66 +22,54 @@ class TILEs_result:
     polygon: list
 
 
-def check_img_hmap(img: Image.Image, heightmap: Image.Image | None = None) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Function to check the image, heightmap, and output the heightmap as numpy array.
-    """
+class TILER:
+    def __init__(self, img: Image.Image, hmap: Image.Image | None = None) -> None:
+        self.img, self.hmap = self.check_img_hmap(img, hmap)
 
-    if not isinstance(img, Image.Image):
-        raise TypeError("Image must be a valid PIL image")
-    img = img.convert("RGBA")
-    if not heightmap or not isinstance(heightmap, Image.Image):
-        # If there is no heightmap, we simply generate a full white one.
-        heightmap = Image.new("L", img.size, color=(255))
-    else:
-        heightmap = heightmap.convert("L")
-        if heightmap.size != img.size:
-            heightmap = heightmap.resize(img.size)
+    @staticmethod
+    def check_img_hmap(img: Image.Image, heightmap: Image.Image | None = None) -> tuple[Image.Image, Image.Image]:
+        """
+        Function to check the image, heightmap, and output the heightmap as numpy array.
+        """
 
-    # normalizing the heightmap to [0, 1]
-    heightmap = np.array(heightmap) / 255.0
+        if not isinstance(img, Image.Image):
+            raise TypeError("Image must be a valid PIL image")
+        img = img.convert("RGBA")
+        if (heightmap is None) or (not isinstance(heightmap, Image.Image)):
+            # If there is no heightmap, we simply generate a full white one.
+            heightmap = Image.new("L", img.size, color=(255))
+        else:
+            heightmap = heightmap.convert("L")
+            if heightmap.size != img.size:
+                heightmap = heightmap.resize(img.size)
 
-    return img, heightmap
+        # normalizing the heightmap to [0, 1]
+        # heightmap = np.array(heightmap) / 255.0
 
+        return img, heightmap
 
-def RGB_std(arr: np.ndarray, hmap: np.ndarray) -> tuple[float, tuple[int, int, int], int]:
-    """
-    Function to output the standard deviation of the selected array
-    and its average color.
+    @staticmethod
+    def RGB_std(arr: np.ndarray, hmap: np.ndarray) -> tuple[float, tuple[int, int, int], int]:
+        """
+        Function to output the standard deviation of the selected image array, its average color and its max hmap value.
 
-    Parameters
-    ----------
-    arr : numpy.asarray
-        The image as a numpy array.
-    hmap : numpy.asarray
-        The heightmap as a numpy array.
+        """
+        # We check only where the pixel is not transparent
+        valid_idx = np.where(arr[:, :, 3] != 0)
+        arr = arr[valid_idx]
+        hmap = hmap[valid_idx]
 
-    Returns
-    -------
-    std : float
-        max Standar deviation of the colors of the image
-    col : tuple(uint, uint, uint)
-        average color of the area, (R, G, B).
-    hmap_weight : TYPE
-        Max value of the heightmap in this part of the image.
+        # removing alpha channel.
+        arr = arr[:, :-1]
 
-    """
-    # We check only where the pixel is not transparent
-    valid_idx = np.where(arr[:, :, 3] != 0)
-    arr = arr[valid_idx]
-    hmap = hmap[valid_idx]
+        std = np.max(np.std(arr, axis=0))
 
-    # removing alpha channel.
-    arr = arr[:, :-1]
+        col = np.mean(arr, axis=0).astype(np.uint8)
+        col = tuple(col)
 
-    std = np.max(np.std(arr, axis=0))
+        hmap_weight = np.max(hmap)
 
-    col = np.mean(arr, axis=0).astype(np.uint8)
-    col = tuple(col)
-
-    hmap_weight = np.max(hmap)
-
-    return std, col, hmap_weight
+        return std, col, hmap_weight
 
 
 def dither(img: Image.Image, kernel: str = "Floyd-Steinberg", nc: int = 2) -> Image.Image:
@@ -167,7 +155,9 @@ def dither(img: Image.Image, kernel: str = "Floyd-Steinberg", nc: int = 2) -> Im
     return dithered
 
 
-def quadtree(img: Image.Image, std_thr: float = 40, heightmap: Image.Image | None = None, max_level: int = 6):
+def quadtree(
+    img: Image.Image, std_thr: float = 40, heightmap: Image.Image | None = None, max_level: int = 6
+) -> TILEs_result:
     """
     Function to filter the image with recursive quadtrees, depending on the
     local standard deviation or according to a heightmap.
@@ -175,37 +165,22 @@ def quadtree(img: Image.Image, std_thr: float = 40, heightmap: Image.Image | Non
     https://github.com/kennycason/art
     https://github.com/fogleman/Quads
 
-
-    Parameters
-    ----------
-    img : PIL Image
-        The image to filter.
-    std_thr : float, optional
-        Standard deviation threshold where the recursion will end. The default is 40.
-    heightmap : PIL Image, optional
-        The heightmap to set the effect. The default is None.
-    max_level : int, optional
-        Max recursion level, as a safety mechanism. The default is 6.
-
-    Returns
-    -------
-    results : Dict
-        Dict containing all the extracted values.
-        "top" & "left": top - left coordinates of the quad
-        "x" & "y": cznter coordinates of the quad
-        "width" & "height": dimensions of the quad
-        "colors": average color of the quad
-        "polys": coordinates of the polygons extracted
-        "level": recursion level of the polygon
-
-
     """
 
     img, heightmap = check_img_hmap(img, heightmap)
 
     results = TILEs_result
 
-    def subdivide(arr, thr, topleft, widthheight, results, heightmap, level=0, max_level=max_level):
+    def subdivide(
+        arr: np.ndarray,
+        thr: float,
+        topleft: tuple[int, int],
+        widthheight: tuple[float, float],
+        results: TILEs_result,
+        heightmap: np.ndarray,
+        level: int = 0,
+        max_level: int = max_level,
+    ):
 
         left, top = topleft  # not smart...
         width, height = widthheight
@@ -217,7 +192,6 @@ def quadtree(img: Image.Image, std_thr: float = 40, heightmap: Image.Image | Non
         # Ending if std below threshold or reaching maximum level or heightmap threshold
         # You would notice that the heightmap calculation actually forces a maximum level of 10.
         if (std < thr) | (level >= max_level) | (hmap_weight - (level * 0.1) < 0.1):
-            # And saving the values, of course.
             results.top.append(top)
             results.left.append(left)
             results.x.append(left + width / 2)
@@ -226,7 +200,7 @@ def quadtree(img: Image.Image, std_thr: float = 40, heightmap: Image.Image | Non
             results.height.append(height)
             results.color.append(col)
             results.level.append(level)
-            # polygon coordinates
+
             poly = [
                 [left, top],
                 [left + width, top],
@@ -238,11 +212,9 @@ def quadtree(img: Image.Image, std_thr: float = 40, heightmap: Image.Image | Non
             return
 
         else:
-
             x2 = left + width / 2
             y2 = top + height / 2
 
-            # Coordinates of the 4 top-left corner of the new subdivisions.
             c1 = (left, top)
             c2 = (x2, top)
             c3 = (x2, y2)
@@ -395,7 +367,7 @@ def voronoitree(
             new_regions.append(new_region.tolist())
         return new_regions, np.asarray(new_vertices)
 
-    def poly_random_points_safe(V, n=10):
+    def poly_random_points_safe(V: np.ndarray, n: int = 10):
         """Random points inside a convex polygon (guaranteed)
         V : numpy array
             Polygon border
