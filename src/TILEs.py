@@ -72,87 +72,71 @@ class TILER:
         return std, col, hmap_weight
 
 
-def dither(img: Image.Image, kernel: str = "Floyd-Steinberg", nc: int = 2) -> Image.Image:
-    """
-    Function to dither an image in B&W. Available kernels are Floyd-Steinberg,
-    Jarvis-Judis-Ninke, Stucki, Atkinson. Don't hesitate to add yours.
-    Inspired by https://tannerhelland.com/2012/12/28/dithering-eleven-algorithms-source-code.html
+class Ditherer(TILER):
+    def __init__(self, image: Image.Image, heightmap: Image.Image | None = None):
+        super().__init__(image, heightmap)
 
-    Parameters
-    ----------
-    img : PIL.Image
-        The image to dither.
-    kernel : string, optional
-        Name of the kernel used for dithering. The default is "Floyd-Steinberg".
-    nc : integer, optional
-        Number of colors used for dithering. The default is 2.
-
-    Raises
-    ------
-    ValueError
-        If the Image is not a proper PIL Image.
-
-    Returns
-    -------
-    PIL.image
-        The dithered image.
-
-    """
-    if not isinstance(img, Image.Image):
-        raise TypeError("Image must be a valid PIL image")
-    img = img.convert("L")
-
-    def _get_new_val(old_val: np.ndarray, nc: int) -> np.ndarray:
+    def dither(self, kernel: str = "Floyd-Steinberg", nc: int = 2) -> Image.Image:
         """
-        Get the "closest" colour to old_val in the range [0, 1] per channel divided
-        into nc values. This works well for B&W pictures, but nor for RGB ones.
-        If nc = 2, this means 2 possible values per channel and hence 2**3 = 8 different colors.
-
+        Function to dither an image in B&W. Available kernels are Floyd-Steinberg,
+        Jarvis-Judis-Ninke, Stucki, Atkinson. Don't hesitate to add yours.
+        Inspired by https://tannerhelland.com/2012/12/28/dithering-eleven-algorithms-source-code.html
         """
 
-        return np.round(old_val * (nc - 1)) / (nc - 1)
+        def _get_new_val(old_val: np.ndarray, nc: int) -> np.ndarray:
+            """
+            Get the "closest" colour to old_val in the range [0, 1] per channel divided
+            into nc values. This works well for B&W pictures, but nor for RGB ones.
+            If nc = 2, this means 2 possible values per channel and hence 2**3 = 8 different colors.
 
-    if kernel not in dithering_kernels.keys():
-        raise ValueError(f"Available dithering kernels are {dithering_kernels.keys()}")
-    width, height = img.size
-    arr = np.array(img, dtype=float) / 255
+            """
 
-    ker = dithering_kernels[kernel]
-    ker = ker / np.sum(ker)
+            return np.round(old_val * (nc - 1)) / (nc - 1)
 
-    ker_h, ker_w = ker.shape
-    ker_h = ker_h // 2
-    ker_w = ker_w // 2
+        if kernel not in dithering_kernels.keys():
+            raise ValueError(f"Available dithering kernels are {dithering_kernels.keys()}")
 
-    pad = max(ker_h, ker_w)
+        img = self.img.convert("L")
+        width, height = img.size
 
-    # Padding the image to fit the kernel. For RGB or L images.
-    if len(arr.shape) == 3:
-        arr = np.pad(arr, ((pad, pad), (pad, pad), (0, 0)), "constant")
-        ker = np.repeat(ker[:, :, np.newaxis], 3, axis=2)
+        arr = np.array(img, dtype=float) / 255
 
-    else:
-        arr = np.pad(arr, pad)
-    # Running the kernel through the image.
-    for ir in range(height):
-        for ic in range(width):
+        ker = dithering_kernels[kernel]
+        ker = ker / np.sum(ker)
 
-            old_val = arr[ir + pad, ic + pad].copy()
-            new_val = _get_new_val(old_val, nc)
+        ker_h, ker_w = ker.shape
+        ker_h = ker_h // 2
+        ker_w = ker_w // 2
 
-            arr[ir + pad, ic + pad] = new_val
-            err = old_val - new_val
-            err_ker = err * ker
+        pad = max(ker_h, ker_w)
 
-            arr[
-                ir + pad - ker_h : ir + pad + ker_h + 1,
-                ic + pad - ker_w : ic + pad + ker_w + 1,
-            ] += err_ker
-    carr = np.array(arr / np.max(arr, axis=(0, 1)) * 255, dtype=np.uint8)[pad:-pad, pad:-pad]
+        # Padding the image to fit the kernel. For RGB or L images.
+        if len(arr.shape) == 3:
+            arr = np.pad(arr, ((pad, pad), (pad, pad), (0, 0)), "constant")
+            ker = np.repeat(ker[:, :, np.newaxis], 3, axis=2)
 
-    dithered = Image.fromarray(carr)
+        else:
+            arr = np.pad(arr, pad)
+        # Running the kernel through the image.
+        for ir in range(height):
+            for ic in range(width):
 
-    return dithered
+                old_val = arr[ir + pad, ic + pad].copy()
+                new_val = _get_new_val(old_val, nc)
+
+                arr[ir + pad, ic + pad] = new_val
+                err = old_val - new_val
+                err_ker = err * ker
+
+                arr[
+                    ir + pad - ker_h : ir + pad + ker_h + 1,
+                    ic + pad - ker_w : ic + pad + ker_w + 1,
+                ] += err_ker
+        carr = np.array(arr / np.max(arr, axis=(0, 1)) * 255, dtype=np.uint8)[pad:-pad, pad:-pad]
+
+        dithered = Image.fromarray(carr)
+
+        return dithered
 
 
 def quadtree(
@@ -677,3 +661,15 @@ def recursive_slice(img, heightmap=None, std_thr=40, max_level=7):
     reslice(arr, heightmap, results, level=0, max_level=max_level, coords=(left, top, right, bottom))
 
     return results
+
+
+if __name__ == "__main__":
+
+    print("started")
+    img = Image.open("images/Lisa.jpg")
+    new_canvas = Image.new("RGBA", (img.width * 2, img.height))
+
+    ditherer = Ditherer(img)
+    dithered = ditherer.dither(kernel="Floyd-Steinberg")
+
+    dithered.show()
