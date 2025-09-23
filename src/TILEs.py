@@ -133,9 +133,6 @@ class Ditherer(TILER):
                     ic + pad - ker_w : ic + pad + ker_w + 1,
                 ] += err_ker
 
-        coords = np.argwhere(arr > 0)
-        print(coords)
-
         carr = np.array(arr * 255, dtype=np.uint8)[pad:-pad, pad:-pad]
 
         dithered = Image.fromarray(carr)
@@ -143,103 +140,106 @@ class Ditherer(TILER):
         return dithered
 
 
-def quadtree(
-    img: Image.Image, std_thr: float = 40, heightmap: Image.Image | None = None, max_level: int = 6
-) -> TILEs_result:
-    """
-    Function to filter the image with recursive quadtrees, depending on the
-    local standard deviation or according to a heightmap.
-    Inspired by many other nice quadtree scripts:
-    https://github.com/kennycason/art
-    https://github.com/fogleman/Quads
+class Quadtree(TILER):
+    def __init__(self, image: Image.Image, heightmap: Image.Image):
+        super().__init__(image, heightmap)
 
-    """
+    def tesselate(self, std_thr: float = 40, max_level: int = 6) -> dict:
+        """
+        Function to filter the image with recursive quadtrees, depending on the
+        local standard deviation or according to a heightmap.
+        Inspired by many other nice quadtree scripts:
+        https://github.com/kennycason/art
+        https://github.com/fogleman/Quads
 
-    img, heightmap = check_img_hmap(img, heightmap)
+        """
 
-    results = TILEs_result
+        results = defaultdict(list)
 
-    def subdivide(
-        arr: np.ndarray,
-        thr: float,
-        topleft: tuple[int, int],
-        widthheight: tuple[float, float],
-        results: TILEs_result,
-        heightmap: np.ndarray,
-        level: int = 0,
-        max_level: int = max_level,
-    ):
+        def subdivide(
+            self,
+            arr: np.ndarray,
+            thr: float,
+            topleft: tuple[int, int],
+            widthheight: tuple[float, float],
+            results: dict,
+            heightmap: np.ndarray,
+            level: int = 0,
+            max_level: int = max_level,
+        ):
 
-        left, top = topleft  # not smart...
-        width, height = widthheight
-        to_check = arr[int(top) : int(top + height), int(left) : int(left + width)]
-        hmap_to_check = heightmap[int(top) : int(top + height), int(left) : int(left + width)]
+            left, top = topleft  # not smart...
+            width, height = widthheight
+            to_check = arr[int(top) : int(top + height), int(left) : int(left + width)]
+            hmap_to_check = heightmap[int(top) : int(top + height), int(left) : int(left + width)]
 
-        std, col, hmap_weight = RGB_std(to_check, hmap_to_check)
+            std, col, hmap_weight = self.RGB_std(to_check, hmap_to_check)
 
-        # Ending if std below threshold or reaching maximum level or heightmap threshold
-        # You would notice that the heightmap calculation actually forces a maximum level of 10.
-        if (std < thr) | (level >= max_level) | (hmap_weight - (level * 0.1) < 0.1):
-            results.top.append(top)
-            results.left.append(left)
-            results.x.append(left + width / 2)
-            results.y.append(top + height / 2)
-            results.width.append(width)
-            results.height.append(height)
-            results.color.append(col)
-            results.level.append(level)
+            # Ending if std below threshold or reaching maximum level or heightmap threshold
+            # You would notice that the heightmap calculation actually forces a maximum level of 10.
+            if (std < thr) | (level >= max_level) | (hmap_weight - (level * 0.1) < 0.1):
+                results["top"].append(top)
+                results["left"].append(left)
+                results["x"].append(left + width / 2)
+                results["y"].append(top + height / 2)
+                results["width"].append(width)
+                results["height"].append(height)
+                results["color"].append(col)
+                results["level"].append(level)
 
-            poly = [
-                [left, top],
-                [left + width, top],
-                [left + width, top + height],
-                [left, top + height],
-            ]
-            results.polygon.append(np.asarray(poly))
+                poly = [
+                    [left, top],
+                    [left + width, top],
+                    [left + width, top + height],
+                    [left, top + height],
+                ]
+                results["polygon"].append(np.asarray(poly))
 
-            return
+                return
 
-        else:
-            x2 = left + width / 2
-            y2 = top + height / 2
+            else:
+                x2 = left + width / 2
+                y2 = top + height / 2
 
-            c1 = (left, top)
-            c2 = (x2, top)
-            c3 = (x2, y2)
-            c4 = (left, y2)
-            # And their new dimensions.
-            new_width = width / 2
-            new_height = height / 2
+                c1 = (left, top)
+                c2 = (x2, top)
+                c3 = (x2, y2)
+                c4 = (left, y2)
+                # And their new dimensions.
+                new_width = width / 2
+                new_height = height / 2
 
-            # Aaaand recursion.
-            for c in [c1, c2, c3, c4]:
-                subdivide(
-                    arr,
-                    thr,
-                    c,
-                    (new_width, new_height),
-                    results,
-                    heightmap,
-                    level=level + 1,
-                    max_level=max_level,
-                )
+                # Aaaand recursion.
+                for c in [c1, c2, c3, c4]:
+                    self.subdivide(
+                        arr,
+                        thr,
+                        c,
+                        (new_width, new_height),
+                        results,
+                        heightmap,
+                        level=level + 1,
+                        max_level=max_level,
+                    )
 
-    img_width, img_height = img.size
+        img_width, img_height = img.size
 
-    arr = np.asarray(img)
+        arr = np.asarray(self.img)
+        heightmap = np.array(self.hmap)
 
-    subdivide(
-        arr,
-        std_thr,
-        (0, 0),
-        (img_width, img_height),
-        results,
-        heightmap,
-        level=0,
-        max_level=max_level,
-    )
+        subdivide(
+            self,
+            arr,
+            std_thr,
+            (0, 0),
+            (img_width, img_height),
+            results,
+            heightmap,
+            level=0,
+            max_level=max_level,
+        )
 
-    return results
+        return results
 
 
 def voronoitree(
@@ -676,7 +676,7 @@ if __name__ == "__main__":
     new_canvas.paste(img, box=(0, 0))
 
     ditherer = Ditherer(img)
-    dithered = ditherer.dither(kernel="Floyd-Steinberg", n_colors=8)
+    dithered = ditherer.dither(kernel="Floyd-Steinberg", n_colors=6)
 
     new_canvas.paste(dithered, (img.width, 0))
 
