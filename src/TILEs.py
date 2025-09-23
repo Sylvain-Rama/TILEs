@@ -11,6 +11,7 @@ from dithering_kernels import dithering_kernels
 
 @dataclass
 class TILEs_result:
+    coords: np.ndarray
     top: list
     left: list
     x: list
@@ -76,14 +77,14 @@ class Ditherer(TILER):
     def __init__(self, image: Image.Image, heightmap: Image.Image | None = None):
         super().__init__(image, heightmap)
 
-    def dither(self, kernel: str = "Floyd-Steinberg", nc: int = 2) -> Image.Image:
+    def dither(self, kernel: str = "Floyd-Steinberg", n_colors: int = 2) -> Image.Image:
         """
         Function to dither an image in B&W. Available kernels are Floyd-Steinberg,
         Jarvis-Judis-Ninke, Stucki, Atkinson. Don't hesitate to add yours.
         Inspired by https://tannerhelland.com/2012/12/28/dithering-eleven-algorithms-source-code.html
         """
 
-        def _get_new_val(old_val: np.ndarray, nc: int) -> np.ndarray:
+        def _get_new_val(old_val: np.ndarray, n_colors: int) -> np.ndarray:
             """
             Get the "closest" colour to old_val in the range [0, 1] per channel divided
             into nc values. This works well for B&W pictures, but nor for RGB ones.
@@ -91,12 +92,11 @@ class Ditherer(TILER):
 
             """
 
-            return np.round(old_val * (nc - 1)) / (nc - 1)
+            return np.round(old_val * (n_colors - 1)) / (n_colors - 1)
 
         if kernel not in dithering_kernels.keys():
             raise ValueError(f"Available dithering kernels are {dithering_kernels.keys()}")
 
-        img = self.img.convert("L")
         width, height = img.size
 
         arr = np.array(img, dtype=float) / 255
@@ -122,7 +122,7 @@ class Ditherer(TILER):
             for ic in range(width):
 
                 old_val = arr[ir + pad, ic + pad].copy()
-                new_val = _get_new_val(old_val, nc)
+                new_val = _get_new_val(old_val, n_colors)
 
                 arr[ir + pad, ic + pad] = new_val
                 err = old_val - new_val
@@ -132,7 +132,11 @@ class Ditherer(TILER):
                     ir + pad - ker_h : ir + pad + ker_h + 1,
                     ic + pad - ker_w : ic + pad + ker_w + 1,
                 ] += err_ker
-        carr = np.array(arr / np.max(arr, axis=(0, 1)) * 255, dtype=np.uint8)[pad:-pad, pad:-pad]
+
+        coords = np.argwhere(arr > 0)
+        print(coords)
+
+        carr = np.array(arr * 255, dtype=np.uint8)[pad:-pad, pad:-pad]
 
         dithered = Image.fromarray(carr)
 
@@ -665,11 +669,15 @@ def recursive_slice(img, heightmap=None, std_thr=40, max_level=7):
 
 if __name__ == "__main__":
 
-    print("started")
     img = Image.open("images/Lisa.jpg")
+    # img = img.convert("L")
     new_canvas = Image.new("RGBA", (img.width * 2, img.height))
 
-    ditherer = Ditherer(img)
-    dithered = ditherer.dither(kernel="Floyd-Steinberg")
+    new_canvas.paste(img, box=(0, 0))
 
-    dithered.show()
+    ditherer = Ditherer(img)
+    dithered = ditherer.dither(kernel="Floyd-Steinberg", n_colors=8)
+
+    new_canvas.paste(dithered, (img.width, 0))
+
+    new_canvas.show()
