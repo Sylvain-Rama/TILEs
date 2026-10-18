@@ -204,7 +204,6 @@ def dither(img, kernel="Floyd-Steinberg", nc=2):
     return dithered
 
 
-#%% Quadtrees
 def quadtree(img, std_thr=40, heightmap=None, max_level=6):
     '''
     Function to filter the image with recursive quadtrees, depending on the 
@@ -325,7 +324,6 @@ def quadtree(img, std_thr=40, heightmap=None, max_level=6):
     return results
 
 
-#%% Voronoitrees
 def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_poly=None):
     '''
     Function to filter the image with recursive voronoi areas, depending on the 
@@ -482,7 +480,7 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
         except SystemError:  # happens with rounding errors and array with 0-dimensions
             print(left, top, right, bottom)
             return
-        shifted_poly = list(tuple(zip(xs - np.min(xs), ys - np.min(ys))))
+        shifted_poly = list(zip(xs - np.min(xs), ys - np.min(ys)))
 
         mask_Im = Image.new("RGBA", (cropped_img.shape[1], cropped_img.shape[0]), 0)
         tmp_drawer = ImageDraw.Draw(mask_Im)
@@ -502,8 +500,8 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
             "left": [left],
             "x": [centre_x],
             "y": [centre_y],
-            "width": [width],
-            "height": [height],
+            "width": [new_width],
+            "height": [new_height],
             "shifted_polys": [shifted_poly],
         }
 
@@ -631,10 +629,7 @@ def throw_polys(img, n_points=100, n_corners=3, distance=10, heightmap=None):
     def get_polygon_coords(point, n_corners=3, distance=10):
         thetas = np.random.uniform(0, 2 * np.pi, size=n_corners)
         # thetas = thetas[np.argsort(thetas)]
-        try:
-            dists = np.random.uniform(0, distance, size=n_corners)
-        except:
-            print(distance, n_corners)
+        dists = np.random.uniform(0, distance, size=n_corners)
         x = list(np.clip(dists * np.cos(thetas) + point[0], 0, width - 1))
         y = list(np.clip(dists * np.sin(thetas) + point[1], 0, height - 1))
 
@@ -680,13 +675,13 @@ def recursive_slice(img, heightmap=None, std_thr=40, max_level=7):
         int_right = int(np.ceil(right))
         int_bottom = int(np.ceil(bottom))
         
-        
-        try:
-            std, col, hmap_weight = RGB_std(arr[int_top: int_bottom, int_left:int_right], 
-                                        heightmap[int_top: int_bottom, int_left:int_right])
-        except:
-            print(coords)
+        if int_right <= int_left or int_bottom <= int_top:
             return
+
+        std, col, hmap_weight = RGB_std(
+            arr[int_top:int_bottom, int_left:int_right],
+            heightmap[int_top:int_bottom, int_left:int_right],
+        )
         
         
         if (std < std_thr) | (level >= max_level) | (hmap_weight - (level * 0.01) < 0.2):
