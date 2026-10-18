@@ -1,18 +1,16 @@
-# -*- coding: utf-8 -*-
 """
 Created on Thu Nov 17 16:43:22 2022
 
 @author: Sylvain
 """
-import numpy as np
-from PIL import Image, ImageDraw
-
-import scipy.spatial
-from shapely.geometry import Polygon
 from collections import defaultdict
 
+import numpy as np
+import scipy.spatial
+from PIL import Image, ImageDraw
+from shapely.geometry import Polygon
 
-#%% Shared functions
+
 def check_img_hmap(img, heightmap=None):
     """
     Function to check the image, heightmap, and output the heightmap as numpy array.
@@ -160,7 +158,7 @@ def dither(img, kernel="Floyd-Steinberg", nc=2):
             [0, 0, 1, 0, 0],
         ],
     }
-    if kernel not in dither_kernels.keys():
+    if kernel not in dither_kernels:
         raise ValueError(f"Available dithering kernels are {dither_kernels.keys()}")
     width, height = img.size
     arr = np.array(img, dtype=float) / 255
@@ -206,7 +204,6 @@ def dither(img, kernel="Floyd-Steinberg", nc=2):
     return dithered
 
 
-#%% Quadtrees
 def quadtree(img, std_thr=40, heightmap=None, max_level=6):
     '''
     Function to filter the image with recursive quadtrees, depending on the 
@@ -327,7 +324,6 @@ def quadtree(img, std_thr=40, heightmap=None, max_level=6):
     return results
 
 
-#%% Voronoitrees
 def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_poly=None):
     '''
     Function to filter the image with recursive voronoi areas, depending on the 
@@ -388,7 +384,7 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
         new_regions = []
         new_vertices = vor.vertices.tolist()
         center = vor.points.mean(axis=0)
-        radius = vor.points.ptp().max() * 2
+        radius = np.ptp(vor.points, axis=0).max() * 2
 
         # Construct a map containing all ridges for a given point
         all_ridges = {}
@@ -452,14 +448,20 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
                 (B[0] - A[0]) * (C[1] - A[1]) - (C[0] - A[0]) * (B[1] - A[1])
             )
 
+        if len(V) < 3:
+            raise ValueError(f"Cannot sample points from a polygon with {len(V)} vertices")
+
         # Cheap trianglulation of the polygon
         C = V.mean(axis=0)
         T = [(C, V[i], V[i + 1]) for i in range(len(V) - 1)]
         A = np.array([triangle_area(*t) for t in T])
-        A /= A.sum()
+        total_area = A.sum()
+        if total_area <= 0:
+            raise ValueError("Cannot sample points from a zero-area polygon")
+        A /= total_area
 
         points = [C]
-        for i in np.random.choice(len(A), size=n - 1, p=A):
+        for i in np.random.choice(len(A), size=n - 1 if n > 1 else 1, p=A):
             points.append(random_point_inside_triangle(*T[i]))
         return points
 
@@ -484,7 +486,7 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
         except SystemError:  # happens with rounding errors and array with 0-dimensions
             print(left, top, right, bottom)
             return
-        shifted_poly = list(tuple(zip(xs - np.min(xs), ys - np.min(ys))))
+        shifted_poly = list(zip(xs - np.min(xs), ys - np.min(ys)))
 
         mask_Im = Image.new("RGBA", (cropped_img.shape[1], cropped_img.shape[0]), 0)
         tmp_drawer = ImageDraw.Draw(mask_Im)
@@ -504,8 +506,8 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
             "left": [left],
             "x": [centre_x],
             "y": [centre_y],
-            "width": [width],
-            "height": [height],
+            "width": [new_width],
+            "height": [new_height],
             "shifted_polys": [shifted_poly],
         }
 
@@ -530,7 +532,7 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
             tile = Image.fromarray(clipped_img, "RGBA")
 
             for k, v in temp_results.items():
-                results[k].append(temp_results[k])
+                results[k].append(v)
             results["images"].append(tile)
             results["colors"].append(col)
             results["level"].append(level)
@@ -543,6 +545,8 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
             polygon = Polygon(vertices[region]).intersection(
                 clip
             )  
+            if polygon.is_empty or polygon.geom_type != "Polygon" or polygon.area <= 0:
+                continue
             polygon = np.array([point for point in polygon.exterior.coords])
             voronoi(
                 img, polygon, results, npoints, level + 1, max_level, std_thr, heightmap
@@ -633,10 +637,7 @@ def throw_polys(img, n_points=100, n_corners=3, distance=10, heightmap=None):
     def get_polygon_coords(point, n_corners=3, distance=10):
         thetas = np.random.uniform(0, 2 * np.pi, size=n_corners)
         # thetas = thetas[np.argsort(thetas)]
-        try:
-            dists = np.random.uniform(0, distance, size=n_corners)
-        except:
-            print(distance, n_corners)
+        dists = np.random.uniform(0, distance, size=n_corners)
         x = list(np.clip(dists * np.cos(thetas) + point[0], 0, width - 1))
         y = list(np.clip(dists * np.sin(thetas) + point[1], 0, height - 1))
 
@@ -682,13 +683,13 @@ def recursive_slice(img, heightmap=None, std_thr=40, max_level=7):
         int_right = int(np.ceil(right))
         int_bottom = int(np.ceil(bottom))
         
-        
-        try:
-            std, col, hmap_weight = RGB_std(arr[int_top: int_bottom, int_left:int_right], 
-                                        heightmap[int_top: int_bottom, int_left:int_right])
-        except:
-            print(coords)
+        if int_right <= int_left or int_bottom <= int_top:
             return
+
+        std, col, hmap_weight = RGB_std(
+            arr[int_top:int_bottom, int_left:int_right],
+            heightmap[int_top:int_bottom, int_left:int_right],
+        )
         
         
         if (std < std_thr) | (level >= max_level) | (hmap_weight - (level * 0.01) < 0.2):

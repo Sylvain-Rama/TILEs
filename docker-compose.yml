@@ -1,0 +1,13 @@
+
+services:
+  app:
+    build: .
+    volumes:
+      - .:/app
+      - uv_venv:/app/.venv   # <- container-only storage
+    command: sleep infinity
+
+volumes:
+  uv_venv:
+
+
