@@ -448,11 +448,17 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
                 (B[0] - A[0]) * (C[1] - A[1]) - (C[0] - A[0]) * (B[1] - A[1])
             )
 
+        if len(V) < 3:
+            raise ValueError(f"Cannot sample points from a polygon with {len(V)} vertices")
+
         # Cheap trianglulation of the polygon
         C = V.mean(axis=0)
         T = [(C, V[i], V[i + 1]) for i in range(len(V) - 1)]
         A = np.array([triangle_area(*t) for t in T])
-        A /= A.sum()
+        total_area = A.sum()
+        if total_area <= 0:
+            raise ValueError("Cannot sample points from a zero-area polygon")
+        A /= total_area
 
         points = [C]
         for i in np.random.choice(len(A), size=n - 1 if n > 1 else 1, p=A):
@@ -539,6 +545,8 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
             polygon = Polygon(vertices[region]).intersection(
                 clip
             )  
+            if polygon.is_empty or polygon.geom_type != "Polygon" or polygon.area <= 0:
+                continue
             polygon = np.array([point for point in polygon.exterior.coords])
             voronoi(
                 img, polygon, results, npoints, level + 1, max_level, std_thr, heightmap
