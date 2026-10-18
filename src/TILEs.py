@@ -384,7 +384,7 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
         new_regions = []
         new_vertices = vor.vertices.tolist()
         center = vor.points.mean(axis=0)
-        radius = vor.points.ptp().max() * 2
+        radius = np.ptp(vor.points, axis=0).max() * 2
 
         # Construct a map containing all ridges for a given point
         all_ridges = {}
@@ -455,7 +455,7 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
         A /= A.sum()
 
         points = [C]
-        for i in np.random.choice(len(A), size=n - 1, p=A):
+        for i in np.random.choice(len(A), size=n - 1 if n > 1 else 1, p=A):
             points.append(random_point_inside_triangle(*T[i]))
         return points
 
