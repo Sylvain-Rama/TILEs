@@ -1,16 +1,14 @@
-# -*- coding: utf-8 -*-
 """
 Created on Thu Nov 17 16:43:22 2022
 
 @author: Sylvain
 """
-import numpy as np
-from PIL import Image, ImageDraw
-
-import scipy.spatial
-from shapely.geometry import Polygon
 from collections import defaultdict
 
+import numpy as np
+import scipy.spatial
+from PIL import Image, ImageDraw
+from shapely.geometry import Polygon
 
 
 def check_img_hmap(img, heightmap=None):
@@ -160,7 +158,7 @@ def dither(img, kernel="Floyd-Steinberg", nc=2):
             [0, 0, 1, 0, 0],
         ],
     }
-    if kernel not in dither_kernels.keys():
+    if kernel not in dither_kernels:
         raise ValueError(f"Available dithering kernels are {dither_kernels.keys()}")
     width, height = img.size
     arr = np.array(img, dtype=float) / 255
@@ -530,7 +528,7 @@ def voronoitree(img, npoints=10, max_level=6, std_thr=40, heightmap=None, first_
             tile = Image.fromarray(clipped_img, "RGBA")
 
             for k, v in temp_results.items():
-                results[k].append(temp_results[k])
+                results[k].append(v)
             results["images"].append(tile)
             results["colors"].append(col)
             results["level"].append(level)
