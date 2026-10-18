@@ -1,0 +1,34 @@
+{
+  "name": "TILEs Dev",
+
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "app",
+
+  "workspaceFolder": "/app",
+
+  "shutdownAction": "stopCompose",
+
+  "overrideCommand": false,
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/app/.venv/bin/python",
+        "python.terminal.activateEnvironment": false,
+        "remote.autoForwardPorts": false
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-toolsai.jupyter"
+      ]
+    }
+  }
+}
+
+
+
+  
+
+  
