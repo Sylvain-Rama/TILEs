@@ -27,6 +27,7 @@ dev = [
     "black",
     "ruff",
     "pyrefly",
+    "pytest",
     "jupyterlab",
     "ipykernel"
 ]
