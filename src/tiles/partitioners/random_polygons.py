@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..extraction import extract_tile
 from ..input import prepare_image
+from ..recursion import extract_tile
 from ..statistics import region_stats
 from ..types import ImageContext, Region, TileSet
 

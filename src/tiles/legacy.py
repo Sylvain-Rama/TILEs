@@ -10,8 +10,7 @@ from .partitioners.quadtree import QuadtreePartitioner
 from .partitioners.random_polygons import random_polygons
 from .partitioners.slicing import SlicePartitioner
 from .partitioners.voronoi import VoronoiPartitioner
-from .recursion import grow_tree
-from .stopping import ThresholdPolicy
+from .recursion import ThresholdPolicy, grow_tree
 from .types import Region, Tile
 
 

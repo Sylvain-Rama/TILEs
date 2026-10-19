@@ -1,23 +1,50 @@
-from typing import Protocol
+from dataclasses import dataclass
 
 import numpy as np
+from PIL import Image, ImageDraw
 
-from .extraction import extract_tile
+from .geometry import polygon_bbox, polygon_center, translate_polygon
+from .protocols import Partitioner, StopPolicy
 from .statistics import region_stats
-from .types import ImageContext, Region, Tile, TileSet
+from .types import ImageContext, Region, RegionStats, Tile, TileSet
 
 
-class Partitioner(Protocol):
-    def split(
-        self,
-        region: Region,
-        context: ImageContext,
-        rng: np.random.Generator,
-    ) -> list[Region]: ...
+@dataclass(frozen=True)
+class ThresholdPolicy:
+    standard_deviation: float = 40.0
+    max_level: int = 6
+    heightmap_threshold: float = 0.1
+    heightmap_decay: float = 0.1
+
+    def should_stop(self, region: Region, stats: RegionStats) -> bool:
+        return (
+            stats.standard_deviation < self.standard_deviation
+            or region.level >= self.max_level
+            or stats.heightmap_max - region.level * self.heightmap_decay < self.heightmap_threshold
+        )
 
 
-class StopPolicy(Protocol):
-    def should_stop(self, region: Region, stats) -> bool: ...
+def extract_tile(context: ImageContext, region: Region) -> Tile:
+    image_height, image_width = context.rgba.shape[:2]
+    bbox = polygon_bbox(region.polygon, image_width, image_height)
+    left, top = bbox[:2]
+    cropped = context.image.crop(bbox)
+    polygon = translate_polygon(region.polygon, left, top)
+
+    mask = Image.new("L", cropped.size, 0)
+    ImageDraw.Draw(mask).polygon(
+        [tuple(point) for point in polygon],
+        fill=255,
+    )
+    cropped.putalpha(mask)
+
+    return Tile(
+        region=region,
+        bbox=bbox,
+        center=polygon_center(region.polygon),
+        color=(0, 0, 0),
+        image=cropped,
+    )
 
 
 def grow_tree(
