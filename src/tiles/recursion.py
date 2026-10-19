@@ -4,8 +4,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from .geometry import polygon_bbox, polygon_center, translate_polygon
-from .protocols import Partitioner, StopPolicy
-from .statistics import region_stats
+from .protocols import Partitioner, RepresentativeColorPolicy, StopPolicy
+from .statistics import region_stats, representative_region_color
 from .types import ImageContext, Region, RegionStats, Tile, TileSet
 
 
@@ -54,22 +54,28 @@ def grow_tree(
     stop_policy: StopPolicy,
     *,
     rng: np.random.Generator,
+    color_policy: RepresentativeColorPolicy | None = None,
 ) -> TileSet:
     tiles: list[Tile] = []
+
+    def add_tile(region: Region, stats: RegionStats) -> None:
+        tile = extract_tile(context, region)
+        tile.color = (
+            stats.mean_color
+            if color_policy is None
+            else representative_region_color(context, region, color_policy)
+        )
+        tiles.append(tile)
 
     def visit(region: Region) -> None:
         stats = region_stats(context, region)
         if stop_policy.should_stop(region, stats):
-            tile = extract_tile(context, region)
-            tile.color = stats.mean_color
-            tiles.append(tile)
+            add_tile(region, stats)
             return
 
         children = partitioner.split(region, context, rng)
         if not children:
-            tile = extract_tile(context, region)
-            tile.color = stats.mean_color
-            tiles.append(tile)
+            add_tile(region, stats)
             return
         for child in children:
             visit(child)

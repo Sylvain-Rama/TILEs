@@ -3,8 +3,9 @@ from __future__ import annotations
 import numpy as np
 
 from ..input import prepare_image
+from ..protocols import RepresentativeColorPolicy
 from ..recursion import extract_tile
-from ..statistics import region_stats
+from ..statistics import region_stats, representative_region_color
 from ..types import ImageContext, Region, TileSet
 
 
@@ -15,6 +16,7 @@ def generate_random_polygons(
     corners: int = 3,
     distance: float = 10,
     rng: np.random.Generator,
+    color_policy: RepresentativeColorPolicy | None = None,
 ) -> TileSet:
     if count < 0:
         raise ValueError("count must be non-negative")
@@ -45,7 +47,12 @@ def generate_random_polygons(
         )
         region = Region(polygon)
         tile = extract_tile(context, region)
-        tile.color = region_stats(context, region).mean_color
+        stats = region_stats(context, region)
+        tile.color = (
+            stats.mean_color
+            if color_policy is None
+            else representative_region_color(context, region, color_policy)
+        )
         tiles.append(tile)
     return TileSet(tuple(tiles))
 
@@ -58,6 +65,7 @@ def random_polygons(
     distance: float = 10,
     heightmap=None,
     rng: np.random.Generator | None = None,
+    color_policy: RepresentativeColorPolicy | None = None,
 ) -> TileSet:
     context = prepare_image(image, heightmap)
     return generate_random_polygons(
@@ -66,4 +74,5 @@ def random_polygons(
         corners=corners,
         distance=distance,
         rng=np.random.default_rng() if rng is None else rng,
+        color_policy=color_policy,
     )

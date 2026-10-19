@@ -4,6 +4,8 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+RGBColor = tuple[int, int, int]
+
 
 @dataclass(frozen=True)
 class ImageContext:
@@ -22,7 +24,7 @@ class Region:
 @dataclass(frozen=True)
 class RegionStats:
     standard_deviation: float
-    mean_color: tuple[int, int, int]
+    mean_color: RGBColor
     heightmap_max: float
     visible_pixel_count: int
 
@@ -32,7 +34,7 @@ class Tile:
     region: Region
     bbox: tuple[int, int, int, int]
     center: tuple[float, float]
-    color: tuple[int, int, int]
+    color: RGBColor
     image: Image.Image | None = None
 
 
