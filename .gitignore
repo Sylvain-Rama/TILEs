@@ -209,3 +209,8 @@ __marimo__/
 .mypy_cache
 .ruff_cache
 .pytest_cache
+
+# Local source output directories
+src/images/
+src/output/
+src/scripts/
