@@ -1,8 +1,12 @@
+from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any
 
 import numpy as np
 from PIL import Image
+
+from .integral import IntegralImage, build_integral_image
 
 RGBColor = tuple[int, int, int]
 
@@ -13,6 +17,19 @@ class ImageContext:
     rgba: np.ndarray
     heightmap: np.ndarray
     size: tuple[int, int]
+
+    @cached_property
+    def integral(self) -> IntegralImage | None:
+        """Summed-area tables for constant-time rectangle statistics; None for very large images."""
+        return build_integral_image(self.rgba)
+
+    @cached_property
+    def visible_heightmap(self) -> np.ndarray:
+        """Heightmap with -inf on transparent pixels, so a plain max ignores them."""
+        visible = self.rgba[:, :, 3] != 0
+        if visible.all():
+            return self.heightmap
+        return np.where(visible, self.heightmap, -np.inf)
 
 
 @dataclass(frozen=True)
@@ -36,7 +53,13 @@ class Tile:
     bbox: tuple[int, int, int, int]
     center: tuple[float, float]
     color: RGBColor
-    image: Image.Image | None = None
+    # Either an image or a callable rendering one; rendering on access keeps tiles light in memory.
+    image_source: Image.Image | Callable[[], Image.Image] | None = None
+
+    @property
+    def image(self) -> Image.Image | None:
+        source = self.image_source
+        return source() if callable(source) else source
 
 
 @dataclass(frozen=True)

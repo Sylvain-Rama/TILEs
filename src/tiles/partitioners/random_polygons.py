@@ -5,7 +5,7 @@ import numpy as np
 from ..input import prepare_image
 from ..protocols import RepresentativeColorPolicy
 from ..recursion import extract_tile
-from ..statistics import region_stats, representative_region_color
+from ..statistics import RegionAnalysis
 from ..types import ImageContext, Region, TileSet
 
 
@@ -46,11 +46,9 @@ def generate_random_polygons(
             )
         )
         region = Region(polygon)
-        tile = extract_tile(context, region)
-        stats = region_stats(context, region)
-        tile.color = (
-            stats.mean_color if color_policy is None else representative_region_color(context, region, color_policy)
-        )
+        analysis = RegionAnalysis(context, region)
+        color = analysis.stats.mean_color if color_policy is None else analysis.representative_color(color_policy)
+        tile = extract_tile(context, region, color, analysis=analysis)
         tiles.append(tile)
     return TileSet(tuple(tiles))
 

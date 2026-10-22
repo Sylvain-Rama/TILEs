@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 import numpy as np
@@ -15,9 +15,24 @@ from .recursion import ThresholdPolicy, grow_tree
 from .types import Region, Tile
 
 
-def tiles_to_legacy_dict(tiles: Iterable[Tile], *, include_images: bool = False) -> dict[str, list[Any]]:
+class LazyTileImages(Sequence):
+    """Sequence of tile images, each rendered when accessed instead of all being held in memory."""
+
+    def __init__(self, tiles: Iterable[Tile]) -> None:
+        self._tiles = tuple(tiles)
+
+    def __len__(self) -> int:
+        return len(self._tiles)
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return [tile.image for tile in self._tiles[index]]
+        return self._tiles[index].image
+
+
+def tiles_to_legacy_dict(tiles: Iterable[Tile], *, include_images: bool = False) -> dict[str, Any]:
     tile_list = list(tiles)
-    result: dict[str, list[Any]] = {
+    result: dict[str, Any] = {
         "top": [tile.bbox[1] for tile in tile_list],
         "left": [tile.bbox[0] for tile in tile_list],
         "x": [tile.center[0] for tile in tile_list],
@@ -30,7 +45,7 @@ def tiles_to_legacy_dict(tiles: Iterable[Tile], *, include_images: bool = False)
         "level": [tile.region.level for tile in tile_list],
     }
     if include_images:
-        result["images"] = [tile.image for tile in tile_list]
+        result["images"] = LazyTileImages(tile_list)
     return result
 
 
