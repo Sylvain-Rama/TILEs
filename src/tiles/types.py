@@ -12,6 +12,7 @@ class ImageContext:
     image: Image.Image
     rgba: np.ndarray
     heightmap: np.ndarray
+    size: tuple[int, int]
 
 
 @dataclass(frozen=True)

@@ -49,9 +49,7 @@ def generate_random_polygons(
         tile = extract_tile(context, region)
         stats = region_stats(context, region)
         tile.color = (
-            stats.mean_color
-            if color_policy is None
-            else representative_region_color(context, region, color_policy)
+            stats.mean_color if color_policy is None else representative_region_color(context, region, color_policy)
         )
         tiles.append(tile)
     return TileSet(tuple(tiles))

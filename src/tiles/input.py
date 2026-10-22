@@ -25,4 +25,5 @@ def prepare_image(
         image=rgba_image,
         rgba=np.asarray(rgba_image),
         heightmap=np.asarray(heightmap_image, dtype=np.float64) / 255.0,
+        size=rgba_image.size,
     )

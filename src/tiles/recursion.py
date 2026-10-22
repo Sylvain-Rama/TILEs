@@ -49,21 +49,34 @@ def extract_tile(context: ImageContext, region: Region) -> Tile:
 
 def grow_tree(
     context: ImageContext,
-    root: Region,
     partitioner: Partitioner,
     stop_policy: StopPolicy,
-    *,
-    rng: np.random.Generator,
     color_policy: RepresentativeColorPolicy | None = None,
+    root: Region | None = None,
+    rng: np.random.Generator | None = None,
 ) -> TileSet:
     tiles: list[Tile] = []
+
+    if root is None:
+        root = Region(
+            polygon=np.array(
+                [
+                    [0, 0],
+                    [context.rgba.shape[1], 0],
+                    [context.rgba.shape[1], context.rgba.shape[0]],
+                    [0, context.rgba.shape[0]],
+                ]
+            ),
+            level=0,
+        )
+
+    if rng is None:
+        rng = np.random.default_rng()
 
     def add_tile(region: Region, stats: RegionStats) -> None:
         tile = extract_tile(context, region)
         tile.color = (
-            stats.mean_color
-            if color_policy is None
-            else representative_region_color(context, region, color_policy)
+            stats.mean_color if color_policy is None else representative_region_color(context, region, color_policy)
         )
         tiles.append(tile)
 
