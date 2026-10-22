@@ -5,11 +5,16 @@ from .types import ImageContext
 
 
 def prepare_image(
-    image: Image.Image,
-    heightmap: Image.Image | None = None,
+    image: Image.Image, heightmap: Image.Image | None = None, resize: float | None = None
 ) -> ImageContext:
     if not isinstance(image, Image.Image):
         raise TypeError("Image must be a valid PIL image")
+
+    if resize is not None:
+        new_size = (int(image.width * resize), int(image.height * resize))
+        image = image.resize(new_size)
+        if heightmap is not None:
+            heightmap = heightmap.resize(new_size)
 
     rgba_image = image.convert("RGBA")
     if heightmap is None:

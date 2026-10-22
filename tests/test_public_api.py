@@ -1,9 +1,12 @@
 import numpy as np
 import pytest
 from PIL import Image
+from shapely.geometry import Point, Polygon
+from shapely.ops import unary_union
 
 import TILEs
-from tiles import MedianRGBColorPolicy
+from tiles import MedianRGBColorPolicy, Region
+from tiles.partitioners.voronoi import VoronoiPartitioner
 
 
 @pytest.fixture
@@ -98,3 +101,45 @@ def test_default_quadtree_color_remains_legacy_mean():
     result = TILEs.quadtree(image, max_level=0)
 
     assert result["colors"] == [(32, 32, 32)]
+
+
+SQUARE = np.array([[0, 0], [100, 0], [100, 100], [0, 100]], dtype=float)
+U_SHAPE = np.array([[0, 0], [100, 0], [100, 100], [70, 100], [70, 30], [30, 30], [30, 100], [0, 100]], dtype=float)
+
+
+def _split(polygon, npoints, seed):
+    return VoronoiPartitioner(npoints).split(Region(polygon), None, np.random.default_rng(seed))
+
+
+def test_voronoi_sampling_reaches_closing_edge():
+    samples = VoronoiPartitioner._sample_points(SQUARE, 2000, np.random.default_rng(0))
+    assert ((samples[:, 0] < 25) & (samples[:, 1] > 40) & (samples[:, 1] < 60)).any()
+
+
+@pytest.mark.parametrize("polygon", [SQUARE, U_SHAPE], ids=["convex", "non-convex"])
+def test_voronoi_samples_stay_inside_polygon(polygon):
+    shape = Polygon(polygon)
+    samples = VoronoiPartitioner._sample_points(polygon, 200, np.random.default_rng(0))
+    assert all(shape.covers(Point(sample)) for sample in samples)
+
+
+@pytest.mark.parametrize("polygon", [SQUARE, U_SHAPE], ids=["convex", "non-convex"])
+@pytest.mark.parametrize("npoints", [3, 4, 10])
+@pytest.mark.parametrize("seed", range(20))
+def test_voronoi_children_tile_parent_exactly(polygon, npoints, seed):
+    parent = Polygon(polygon)
+    children = [Polygon(child.polygon) for child in _split(polygon, npoints, seed)]
+    assert sum(child.area for child in children) == pytest.approx(parent.area)
+    assert unary_union(children).area == pytest.approx(parent.area)
+
+
+@pytest.mark.parametrize(
+    "polygon",
+    [
+        np.array([[0, 0], [10, 0], [20, 0], [30, 0]], dtype=float),
+        np.array([[5, 5], [5, 5], [5, 5]], dtype=float),
+    ],
+    ids=["zero-area-line", "single-point"],
+)
+def test_voronoi_degenerate_region_is_left_unsplit(polygon):
+    assert _split(polygon, 4, 0) == []
