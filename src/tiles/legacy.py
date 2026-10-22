@@ -54,11 +54,11 @@ def quadtree(
     height, width = context.rgba.shape[:2]
     tiles = grow_tree(
         context,
-        _root_region(width, height),
-        QuadtreePartitioner(),
-        ThresholdPolicy(std_thr, max_level),
-        rng=np.random.default_rng() if rng is None else rng,
+        partitioner=QuadtreePartitioner(),
+        stop_policy=ThresholdPolicy(std_thr, max_level),
         color_policy=color_policy,
+        root=_root_region(width, height),
+        rng=np.random.default_rng() if rng is None else rng,
     )
     return tiles_to_legacy_dict(tiles)
 
@@ -76,11 +76,11 @@ def recursive_slice(
     height, width = context.rgba.shape[:2]
     tiles = grow_tree(
         context,
-        _root_region(width, height),
-        SlicePartitioner(),
-        ThresholdPolicy(std_thr, max_level, heightmap_threshold=0.2, heightmap_decay=0.01),
-        rng=np.random.default_rng() if rng is None else rng,
+        partitioner=SlicePartitioner(),
+        stop_policy=ThresholdPolicy(std_thr, max_level, heightmap_threshold=0.2, heightmap_decay=0.01),
         color_policy=color_policy,
+        root=_root_region(width, height),
+        rng=np.random.default_rng() if rng is None else rng,
     )
     return tiles_to_legacy_dict(tiles)
 
@@ -100,11 +100,11 @@ def voronoitree(
     height, width = context.rgba.shape[:2]
     tiles = grow_tree(
         context,
-        _root_region(width, height, first_poly),
-        VoronoiPartitioner(npoints),
-        ThresholdPolicy(std_thr, max_level),
-        rng=np.random.default_rng() if rng is None else rng,
+        partitioner=VoronoiPartitioner(npoints),
+        stop_policy=ThresholdPolicy(std_thr, max_level),
         color_policy=color_policy,
+        root=_root_region(width, height, first_poly),
+        rng=np.random.default_rng() if rng is None else rng,
     )
     return tiles_to_legacy_dict(tiles, include_images=True)
 
