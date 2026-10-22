@@ -5,7 +5,7 @@ from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 
 import TILEs
-from tiles import MedianRGBColorPolicy, Region
+from tiles import DominantColorPolicy, MeanRGBColorPolicy, MedianRGBColorPolicy, OKLabChromaColorPolicy, Region
 from tiles.partitioners.voronoi import VoronoiPartitioner
 
 
@@ -322,3 +322,108 @@ def test_lazy_images_match_cropped_reference():
         tile_pixels = np.asarray(tile)
         assert tile_pixels.shape[:2] == (height, width)
         assert np.array_equal(tile_pixels[..., :3], rgba[top : top + height, left : left + width, :3])
+
+
+# --- vivid colour policies ---
+
+
+def _pixels(*groups):
+    return np.array([color for color, count in groups for _ in range(count)], dtype=np.uint8)
+
+
+@pytest.mark.parametrize("policy", [OKLabChromaColorPolicy(), DominantColorPolicy()], ids=["oklab", "dominant"])
+def test_vivid_policies_return_the_colour_of_a_uniform_region(policy):
+    assert policy.representative_color(_pixels(((10, 200, 30), 7))) == (10, 200, 30)
+
+
+@pytest.mark.parametrize("policy", [OKLabChromaColorPolicy(), DominantColorPolicy()], ids=["oklab", "dominant"])
+def test_vivid_policies_reject_empty_input(policy):
+    with pytest.raises(ValueError):
+        policy.representative_color(np.empty((0, 3), dtype=np.uint8))
+
+
+def test_dominant_color_ignores_minority_hues():
+    pixels = _pixels(((220, 30, 30), 60), ((20, 40, 230), 40))
+    assert DominantColorPolicy().representative_color(pixels) == (220, 30, 30)
+
+
+def test_dominant_color_averages_within_the_winning_bin():
+    pixels = _pixels(((200, 10, 10), 5), ((202, 12, 14), 5), ((0, 0, 255), 3))
+    assert DominantColorPolicy().representative_color(pixels) == (201, 11, 12)
+
+
+@pytest.mark.parametrize("bits", [0, 9])
+def test_dominant_color_validates_bits(bits):
+    with pytest.raises(ValueError):
+        DominantColorPolicy(bits=bits)
+
+
+def _oklab_chroma(rgb):
+    from tiles.colors import srgb_to_oklab
+
+    lab = srgb_to_oklab(np.array(rgb, dtype=float))
+    return float(np.hypot(lab[1], lab[2]))
+
+
+MIXED_HUES = [
+    [((255, 0, 0), 50), ((0, 0, 255), 50)],
+    [((255, 0, 0), 50), ((0, 255, 0), 50)],
+    [((220, 30, 30), 60), ((128, 128, 128), 40)],
+]
+
+
+@pytest.mark.parametrize("groups", MIXED_HUES)
+def test_oklab_chroma_policy_vividness_is_monotonic(groups):
+    pixels = _pixels(*groups)
+    chromas = [_oklab_chroma(OKLabChromaColorPolicy(vividness=v).representative_color(pixels)) for v in (0, 0.5, 1)]
+    assert chromas == sorted(chromas)
+
+
+def test_oklab_chroma_policy_restores_chroma_of_mixed_hues():
+    pixels = _pixels(((255, 0, 0), 50), ((0, 0, 255), 50))
+    plain, default, vivid = (
+        _oklab_chroma(OKLabChromaColorPolicy(vividness=v).representative_color(pixels)) for v in (0, 0.5, 1)
+    )
+    assert plain < default < vivid
+
+
+@pytest.mark.parametrize("groups", MIXED_HUES[:2])
+def test_oklab_chroma_policy_is_more_vivid_than_the_srgb_mean(groups):
+    pixels = _pixels(*groups)
+    mean = MeanRGBColorPolicy().representative_color(pixels)
+    assert _oklab_chroma(OKLabChromaColorPolicy().representative_color(pixels)) > _oklab_chroma(mean)
+
+
+def test_oklab_chroma_policy_does_not_amplify_cancelling_hues():
+    pixels = _pixels(((255, 0, 0), 50), ((0, 255, 255), 50))
+    plain = OKLabChromaColorPolicy(vividness=0).representative_color(pixels)
+    default = OKLabChromaColorPolicy().representative_color(pixels)
+    assert _oklab_chroma(default) < 0.5 * _oklab_chroma((255, 0, 0))
+    assert _oklab_chroma(plain) <= _oklab_chroma(default)
+
+
+@pytest.mark.parametrize("vividness", [-0.1, 1.1])
+def test_oklab_chroma_policy_validates_vividness(vividness):
+    with pytest.raises(ValueError):
+        OKLabChromaColorPolicy(vividness=vividness)
+
+
+def test_oklab_round_trip():
+    from tiles.colors import oklab_to_srgb, srgb_to_oklab
+
+    rng = np.random.default_rng(0)
+    for rgb in rng.integers(0, 256, size=(100, 3)):
+        assert max(abs(np.array(oklab_to_srgb(srgb_to_oklab(rgb))) - rgb)) <= 1
+
+
+def test_oklab_out_of_gamut_keeps_channels_valid():
+    from tiles.colors import oklab_to_srgb
+
+    color = oklab_to_srgb(np.array([0.7, 0.4, 0.3]))
+    assert all(0 <= channel <= 255 for channel in color)
+
+
+@pytest.mark.parametrize("policy", [OKLabChromaColorPolicy(), DominantColorPolicy()], ids=["oklab", "dominant"])
+def test_vivid_policies_work_in_partitioners(policy):
+    result = TILEs.quadtree(_transparent_image(32, 32), max_level=2, std_thr=0, color_policy=policy)
+    assert len(result["colors"]) == 16

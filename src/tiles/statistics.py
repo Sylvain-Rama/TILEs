@@ -11,23 +11,6 @@ from .types import ImageContext, Region, RegionStats, RGBColor
 _EMPTY_STATS = RegionStats(0.0, (0, 0, 0), 0.0, 0)
 
 
-def _validate_rgb_pixels(rgb_pixels: np.ndarray) -> None:
-    if rgb_pixels.ndim != 2 or rgb_pixels.shape[0] == 0 or rgb_pixels.shape[1] != 3:
-        raise ValueError("RGB pixels must be a non-empty array with shape (n, 3)")
-
-
-class MeanRGBColorPolicy:
-    def representative_color(self, rgb_pixels: np.ndarray) -> RGBColor:
-        _validate_rgb_pixels(rgb_pixels)
-        return tuple(np.rint(np.mean(rgb_pixels, axis=0)).astype(np.uint8).tolist())
-
-
-class MedianRGBColorPolicy:
-    def representative_color(self, rgb_pixels: np.ndarray) -> RGBColor:
-        _validate_rgb_pixels(rgb_pixels)
-        return tuple(np.rint(np.median(rgb_pixels, axis=0)).astype(np.uint8).tolist())
-
-
 def _region_mask(region: Region, bbox: tuple[int, int, int, int]) -> np.ndarray:
     left, top, right, bottom = bbox
     width = max(0, right - left)
