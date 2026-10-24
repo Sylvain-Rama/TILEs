@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 from .types import RGBColor
@@ -138,3 +140,27 @@ class DominantColorPolicy:
         dominant = np.bincount(bins).argmax()
         color = np.rint(pixels[bins == dominant].mean(axis=0)).astype(np.uint8)
         return (int(color[0]), int(color[1]), int(color[2]))
+
+
+class MostSaturatedColorPolicy:
+    """Colour of the most saturated pixels of the region, so tiles stay vivid without boosting the image.
+
+    Saturation is the OKLab chroma, which tracks perceived colourfulness (unlike HSV saturation, it does
+    not call near-black noise "saturated"). The pixels in the top ``top_fraction`` by chroma are averaged
+    in OKLab: ``0`` returns the single most saturated pixel, which is exact but sensitive to noise and
+    JPEG artefacts, while larger values trade a little vividness for stability. ``1`` is the plain OKLab mean.
+    """
+
+    def __init__(self, top_fraction: float = 0.05) -> None:
+        if not 0.0 <= top_fraction <= 1.0:
+            raise ValueError("top_fraction must be between 0 and 1")
+        self.top_fraction = top_fraction
+
+    def representative_color(self, rgb_pixels: np.ndarray) -> RGBColor:
+        _validate_rgb_pixels(rgb_pixels)
+        lab = srgb_to_oklab(rgb_pixels)
+        count = max(1, math.ceil(self.top_fraction * len(lab)))
+        if count < len(lab):
+            chroma = np.hypot(lab[:, 1], lab[:, 2])
+            lab = lab[np.argpartition(-chroma, count - 1)[:count]]
+        return oklab_to_srgb(lab.mean(axis=0))

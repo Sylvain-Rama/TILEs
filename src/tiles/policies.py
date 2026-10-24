@@ -172,10 +172,16 @@ class PerceptualUniformityPolicy:
     of about 0.02 is just noticeable. ``lightness_weight`` above 1 makes brightness changes count more
     than hue changes, below 1 less. Unlike the RGB deviation, this does not over-react to saturated blues
     and under-react to greens.
+
+    Photographs span a narrow range of errors: the whole image typically sits around 0.2-0.3, so a
+    ``tolerance`` above that leaves a single region, while one near 0.02 splits down to single pixels.
+    A default of 0.1 gives about as many tiles as the legacy RGB threshold of 40. ``max_level`` bounds
+    the recursion whatever the tolerance.
     """
 
-    tolerance: float = 0.05
+    tolerance: float = 0.1
     lightness_weight: float = 1.0
+    max_level: int = 6
 
     def __post_init__(self) -> None:
         if self.tolerance < 0:
@@ -188,7 +194,9 @@ class PerceptualUniformityPolicy:
         return math.sqrt(self.lightness_weight * lightness + a + b)
 
     def should_stop(self, region: Region, stats: RegionStats, rng: np.random.Generator | None = None) -> bool:
-        return stats.visible_pixel_count == 0 or self.error(stats) <= self.tolerance
+        if stats.visible_pixel_count == 0 or region.level >= self.max_level:
+            return True
+        return self.error(stats) <= self.tolerance
 
 
 class _Combination:

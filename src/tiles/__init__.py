@@ -1,4 +1,10 @@
-from .colors import DominantColorPolicy, MeanRGBColorPolicy, MedianRGBColorPolicy, OKLabChromaColorPolicy
+from .colors import (
+    DominantColorPolicy,
+    MeanRGBColorPolicy,
+    MedianRGBColorPolicy,
+    MostSaturatedColorPolicy,
+    OKLabChromaColorPolicy,
+)
 from .input_output import load_images
 from .legacy import quadtree, recursive_slice, throw_polys, voronoitree
 from .policies import (
@@ -26,6 +32,7 @@ __all__ = [
     "MaxLevelPolicy",
     "MeanRGBColorPolicy",
     "MedianRGBColorPolicy",
+    "MostSaturatedColorPolicy",
     "OKLabChromaColorPolicy",
     "PerceptualUniformityPolicy",
     "RGBColor",

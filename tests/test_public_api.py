@@ -13,6 +13,7 @@ from tiles import (
     DominantColorPolicy,
     MeanRGBColorPolicy,
     MedianRGBColorPolicy,
+    MostSaturatedColorPolicy,
     OKLabChromaColorPolicy,
     Region,
     load_images,
@@ -443,7 +444,52 @@ def test_oklab_out_of_gamut_keeps_channels_valid():
     assert all(0 <= channel <= 255 for channel in color)
 
 
-@pytest.mark.parametrize("policy", [OKLabChromaColorPolicy(), DominantColorPolicy()], ids=["oklab", "dominant"])
+def test_most_saturated_policy_picks_the_most_colourful_pixel():
+    pixels = _pixels(((128, 128, 128), 50), ((200, 40, 40), 1), ((150, 120, 110), 20))
+    assert MostSaturatedColorPolicy(top_fraction=0).representative_color(pixels) == (200, 40, 40)
+
+
+def test_most_saturated_policy_ignores_dark_noise():
+    # Near-black pixels have a high HSV saturation but almost no chroma.
+    pixels = _pixels(((3, 0, 0), 10), ((60, 120, 200), 3))
+    assert MostSaturatedColorPolicy(top_fraction=0).representative_color(pixels) == (60, 120, 200)
+
+
+def test_most_saturated_policy_averages_the_top_fraction():
+    pixels = _pixels(((128, 128, 128), 90), ((220, 30, 30), 5), ((200, 50, 50), 5))
+    single = MostSaturatedColorPolicy(top_fraction=0).representative_color(pixels)
+    top_tenth = MostSaturatedColorPolicy(top_fraction=0.1).representative_color(pixels)
+    assert single == (220, 30, 30)
+    assert top_tenth != single
+    assert 200 <= top_tenth[0] <= 220 and 30 <= top_tenth[1] <= 50
+
+
+def test_most_saturated_policy_is_more_vivid_than_the_mean_and_equals_it_at_one():
+    pixels = _pixels(((255, 0, 0), 10), ((0, 0, 255), 10), ((128, 128, 128), 30))
+    vivid = MostSaturatedColorPolicy().representative_color(pixels)
+    assert _oklab_chroma(vivid) > _oklab_chroma(MeanRGBColorPolicy().representative_color(pixels))
+    assert MostSaturatedColorPolicy(top_fraction=1).representative_color(pixels) == OKLabChromaColorPolicy(
+        vividness=0
+    ).representative_color(pixels)
+
+
+def test_most_saturated_policy_returns_the_colour_of_a_uniform_region():
+    assert MostSaturatedColorPolicy().representative_color(_pixels(((10, 200, 30), 7))) == (10, 200, 30)
+
+
+def test_most_saturated_policy_rejects_empty_input_and_bad_fraction():
+    with pytest.raises(ValueError):
+        MostSaturatedColorPolicy().representative_color(np.empty((0, 3), dtype=np.uint8))
+    for fraction in (-0.1, 1.1):
+        with pytest.raises(ValueError):
+            MostSaturatedColorPolicy(top_fraction=fraction)
+
+
+@pytest.mark.parametrize(
+    "policy",
+    [OKLabChromaColorPolicy(), DominantColorPolicy(), MostSaturatedColorPolicy()],
+    ids=["oklab", "dominant", "saturated"],
+)
 def test_vivid_policies_work_in_partitioners(policy):
     result = TILEs.quadtree(prepare_image(_transparent_image(32, 32)), max_level=2, std_thr=0, color_policy=policy)
     assert len(result["colors"]) == 16
@@ -812,6 +858,18 @@ def test_perceptual_policy_decisions():
     assert not policy.should_stop(region, far)
     assert PerceptualUniformityPolicy(tolerance=0.6).should_stop(region, far)
     assert policy.should_stop(region, _stats(visible_pixel_count=0))
+
+
+def test_perceptual_policy_depth_is_bounded_whatever_the_tolerance():
+    from tiles import PerceptualUniformityPolicy
+
+    noise = np.random.default_rng(0).integers(0, 256, (64, 64, 3), dtype=np.uint8)
+    context = prepare_image(Image.fromarray(noise))
+
+    assert len(_grow(context, PerceptualUniformityPolicy(tolerance=0, max_level=3))) == 4**3
+    assert PerceptualUniformityPolicy(tolerance=0, max_level=2).should_stop(
+        Region(SQUARE, level=2), _two_pixel_stats((0, 0, 0), (255, 255, 255))
+    )
 
 
 @pytest.mark.parametrize("kwargs", [{"tolerance": -1}, {"lightness_weight": -1}])

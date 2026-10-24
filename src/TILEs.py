@@ -5,6 +5,7 @@ from tiles import (
     DominantColorPolicy,
     MeanRGBColorPolicy,
     MedianRGBColorPolicy,
+    MostSaturatedColorPolicy,
     OKLabChromaColorPolicy,
     RepresentativeColorPolicy,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "DominantColorPolicy",
     "MeanRGBColorPolicy",
     "MedianRGBColorPolicy",
+    "MostSaturatedColorPolicy",
     "OKLabChromaColorPolicy",
     "RepresentativeColorPolicy",
     "dither",
