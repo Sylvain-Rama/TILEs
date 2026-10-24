@@ -66,7 +66,7 @@ def grow_tree(
 
     def visit(region: Region) -> None:
         analysis = RegionAnalysis(context, region)
-        if stop_policy.should_stop(region, analysis.stats):
+        if stop_policy.should_stop(region, analysis.stats, rng):
             add_tile(region, analysis)
             return
 

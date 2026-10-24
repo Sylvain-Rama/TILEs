@@ -2,7 +2,7 @@ from typing import Protocol
 
 import numpy as np
 
-from .types import ImageContext, Region, RGBColor
+from .types import ImageContext, Region, RegionStats, RGBColor
 
 
 class Partitioner(Protocol):
@@ -15,7 +15,7 @@ class Partitioner(Protocol):
 
 
 class StopPolicy(Protocol):
-    def should_stop(self, region: Region, stats) -> bool: ...
+    def should_stop(self, region: Region, stats: RegionStats, rng: np.random.Generator) -> bool: ...
 
 
 class RepresentativeColorPolicy(Protocol):

@@ -7,11 +7,12 @@ import numpy as np
 
 from .geometry import root_region
 from .partitioners.quadtree import QuadtreePartitioner
+from .policies import ThresholdPolicy
 from .partitioners.random_polygons import random_polygons
 from .partitioners.slicing import SlicePartitioner
 from .partitioners.voronoi import VoronoiPartitioner
 from .protocols import RepresentativeColorPolicy
-from .recursion import ThresholdPolicy, grow_tree
+from .recursion import grow_tree
 from .types import ImageContext, Tile
 
 

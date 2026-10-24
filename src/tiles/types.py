@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
 
@@ -34,6 +34,14 @@ class ImageContext:
         return np.where(visible, self.heightmap, -np.inf)
 
     @cached_property
+    def visible_heightmap_min(self) -> np.ndarray:
+        """Heightmap with +inf on transparent pixels, so a plain min ignores them."""
+        visible = self.rgba[:, :, 3] != 0
+        if visible.all():
+            return self.heightmap
+        return np.where(visible, self.heightmap, np.inf)
+
+    @cached_property
     def masked_heightmap(self) -> np.ndarray:
         """Heightmap with 0 on transparent pixels, so a plain sum only counts visible ones."""
         visible = self.rgba[:, :, 3] != 0
@@ -57,6 +65,22 @@ class RegionStats:
     visible_pixel_count: int
     heightmap_mean: float = 0.0
     bbox_size: tuple[int, int] = (0, 0)
+    heightmap_min: float = 0.0
+    # Computing OKLab variances costs a pass over the pixels, so it only happens if a policy asks.
+    oklab_variance_source: Callable[[], tuple[float, float, float]] | None = field(
+        default=None, repr=False, compare=False
+    )
+
+    @property
+    def heightmap_range(self) -> float:
+        return self.heightmap_max - self.heightmap_min
+
+    @cached_property
+    def oklab_variance(self) -> tuple[float, float, float]:
+        """Variance of the lightness, a and b channels of the visible pixels in OKLab."""
+        if self.oklab_variance_source is None:
+            raise ValueError("These statistics carry no pixel data to compute OKLab variances from")
+        return self.oklab_variance_source()
 
 
 @dataclass

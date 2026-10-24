@@ -5,6 +5,7 @@ from functools import cached_property
 import numpy as np
 from PIL import Image, ImageDraw
 
+from .colors import srgb_to_oklab
 from .geometry import bounds_bbox, polygon_bbox, polygon_center, rectangle_bounds, translate_polygon
 from .protocols import RepresentativeColorPolicy
 from .types import ImageContext, Region, RegionStats, RGBColor
@@ -47,6 +48,7 @@ def _stats_from_samples(
         heightmap_max=float(np.max(selected_heightmap)),
         visible_pixel_count=len(selected),
         heightmap_mean=float(np.mean(selected_heightmap)),
+        heightmap_min=float(np.min(selected_heightmap)),
         bbox_size=_bbox_size(bbox),
     )
 
@@ -70,6 +72,7 @@ def _rectangle_stats(context: ImageContext, bbox: tuple[int, int, int, int]) -> 
         heightmap_max=float(context.visible_heightmap[top:bottom, left:right].max()),
         visible_pixel_count=count,
         heightmap_mean=float(context.masked_heightmap[top:bottom, left:right].sum()) / count,
+        heightmap_min=float(context.visible_heightmap_min[top:bottom, left:right].min()),
         bbox_size=_bbox_size(bbox),
     )
 
@@ -122,12 +125,19 @@ class RegionAnalysis:
     @cached_property
     def stats(self) -> RegionStats:
         if self._is_empty:
-            return _empty_stats(self.bbox)
-        if self._is_rectangle:
-            stats = _rectangle_stats(self.context, self.bbox)
-            if stats is not None:
-                return stats
-        return _stats_from_samples(*self.samples, self.bbox)
+            stats = _empty_stats(self.bbox)
+        else:
+            stats = _rectangle_stats(self.context, self.bbox) if self._is_rectangle else None
+            if stats is None:
+                stats = _stats_from_samples(*self.samples, self.bbox)
+        return replace(stats, oklab_variance_source=self._oklab_variance)
+
+    def _oklab_variance(self) -> tuple[float, float, float]:
+        selected, _ = self.samples
+        if selected.size == 0:
+            return (0.0, 0.0, 0.0)
+        lightness, a, b = np.var(srgb_to_oklab(selected), axis=0).tolist()
+        return (lightness, a, b)
 
     def representative_color(self, policy: RepresentativeColorPolicy) -> RGBColor:
         selected, _ = self.samples

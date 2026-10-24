@@ -629,3 +629,206 @@ def test_target_size_with_flat_regions_through_any_of():
     detailed = [tile for tile in tiles if tile.center[0] > 32]
     assert {tile.bbox[2] - tile.bbox[0] for tile in flat} == {32}
     assert {tile.bbox[2] - tile.bbox[0] for tile in detailed} == {8}
+
+
+# --- heightmap range, stochastic and perceptual stop policies ---
+
+
+@pytest.mark.parametrize("use_tables", [True, False], ids=["tables", "slices"])
+def test_stats_report_heightmap_min(monkeypatch, use_tables):
+    from tiles import integral
+    from tiles.statistics import RegionAnalysis
+
+    if not use_tables:
+        monkeypatch.setattr(integral, "INTEGRAL_MAX_PIXELS", 0)
+    rng = np.random.default_rng(1)
+    context = prepare_image(_transparent_image(), Image.fromarray(rng.integers(0, 256, (30, 40), dtype=np.uint8)))
+
+    for left, top, right, bottom in [(0, 0, 40, 30), (3, 5, 20, 17), (25, 2, 39, 9)]:
+        polygon = np.array([[left, top], [right, top], [right, bottom], [left, bottom]], dtype=float)
+        stats = RegionAnalysis(context, Region(polygon)).stats
+        _, heights = _reference_stats(context, left, top, right, bottom)
+        if len(heights):
+            assert stats.heightmap_min == float(np.min(heights))
+            assert stats.heightmap_range == float(np.max(heights) - np.min(heights))
+
+
+def test_polygon_stats_report_heightmap_min():
+    from tiles.statistics import RegionAnalysis
+
+    context = _half_bright_context(gradient=False)
+    straddling = np.array([[20, 0], [50, 0], [20, 30]], dtype=float)
+    stats = RegionAnalysis(context, Region(straddling)).stats
+    assert (stats.heightmap_min, stats.heightmap_max) == (0.0, 1.0)
+
+
+@pytest.mark.parametrize("as_polygon", [False, True], ids=["rectangle", "polygon"])
+def test_oklab_variance_matches_reference(as_polygon):
+    from tiles.colors import srgb_to_oklab
+    from tiles.statistics import RegionAnalysis
+
+    context = prepare_image(_transparent_image())
+    left, top, right, bottom = 4, 3, 30, 22
+    polygon = np.array([[left, top], [right, top], [right, bottom], [left, bottom]], dtype=float)
+    if as_polygon:
+        polygon = np.array([[left, top], [right, top], [(left + right) / 2, bottom]], dtype=float)
+    analysis = RegionAnalysis(context, Region(polygon))
+
+    selected, _ = analysis.samples
+    expected = np.var(srgb_to_oklab(selected), axis=0)
+    assert analysis.stats.oklab_variance == pytest.approx(tuple(expected))
+
+
+def test_oklab_variance_of_an_empty_region_is_zero():
+    from tiles.statistics import RegionAnalysis
+
+    context = prepare_image(Image.new("RGBA", (8, 8), (10, 20, 30, 0)))
+    polygon = np.array([[0, 0], [8, 0], [8, 8], [0, 8]], dtype=float)
+    assert RegionAnalysis(context, Region(polygon)).stats.oklab_variance == (0.0, 0.0, 0.0)
+
+
+def test_oklab_variance_needs_pixel_data():
+    with pytest.raises(ValueError):
+        _ = _stats().oklab_variance
+
+
+def test_range_policy_stops_on_flat_heightmaps():
+    from tiles import HeightmapRangePolicy
+
+    policy = HeightmapRangePolicy(max_range=0.1)
+    region = Region(SQUARE)
+    assert policy.should_stop(region, _stats(heightmap_min=0.95, heightmap_max=1.0))
+    assert not policy.should_stop(region, _stats(heightmap_min=0.0, heightmap_max=0.5))
+    assert policy.should_stop(region, _stats(visible_pixel_count=0))
+    with pytest.raises(ValueError):
+        HeightmapRangePolicy(max_range=-1)
+
+
+def test_range_policy_keeps_heightmap_edges_sharp():
+    from tiles import AllOf, HeightmapRangePolicy, UniformColorPolicy
+
+    pixels = np.full((64, 64, 3), 90, dtype=np.uint8)
+    heightmap = np.zeros((64, 64), dtype=np.uint8)
+    heightmap[:, 40:] = 255
+    context = prepare_image(Image.fromarray(pixels), Image.fromarray(heightmap))
+
+    tiles = list(_grow(context, AllOf(UniformColorPolicy(5), HeightmapRangePolicy(0.1))))
+    widths = {tile.bbox[2] - tile.bbox[0] for tile in tiles}
+    assert widths == {32, 16, 8}
+    assert not any(tile.bbox[0] < 40 < tile.bbox[2] for tile in tiles)
+
+
+def test_stochastic_policy_probability_follows_heightmap():
+    from tiles import StochasticStopPolicy
+
+    policy = StochasticStopPolicy(dark_probability=0.8, bright_probability=0.2)
+    assert policy.stop_probability(0.0) == pytest.approx(0.8)
+    assert policy.stop_probability(1.0) == pytest.approx(0.2)
+    assert policy.stop_probability(0.5) == pytest.approx(0.5)
+    assert StochasticStopPolicy(0.8, 0.2, gamma=2).stop_probability(0.5) == pytest.approx(0.2 + 0.6 * 0.25)
+
+
+def test_stochastic_policy_respects_levels_and_needs_a_generator():
+    from tiles import StochasticStopPolicy
+
+    policy = StochasticStopPolicy(dark_probability=1.0, bright_probability=1.0, max_level=3, min_level=1)
+    generator = np.random.default_rng(0)
+    assert not policy.should_stop(Region(SQUARE, level=0), _stats(), generator)
+    assert policy.should_stop(Region(SQUARE, level=1), _stats(), generator)
+    assert policy.should_stop(Region(SQUARE, level=3), _stats(), None)
+    assert policy.should_stop(Region(SQUARE, level=0), _stats(visible_pixel_count=0), None)
+    with pytest.raises(ValueError):
+        policy.should_stop(Region(SQUARE, level=1), _stats(), None)
+
+
+@pytest.mark.parametrize(
+    "kwargs", [{"dark_probability": 1.5}, {"bright_probability": -0.1}, {"gamma": 0}, {"min_level": -1}]
+)
+def test_stochastic_policy_validates_arguments(kwargs):
+    from tiles import StochasticStopPolicy
+
+    with pytest.raises(ValueError):
+        StochasticStopPolicy(**kwargs)
+
+
+def test_stochastic_policy_end_to_end_follows_heightmap():
+    from tiles import StochasticStopPolicy
+
+    policy = StochasticStopPolicy(dark_probability=1.0, bright_probability=0.0, max_level=3, min_level=1)
+    tiles = _grow(_half_bright_context(gradient=False), policy)
+    assert {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] < 32} == {32}
+    assert {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] > 32} == {8}
+
+
+def test_stochastic_policy_is_reproducible_from_the_seed():
+    from tiles import StochasticStopPolicy
+    from tiles.partitioners import QuadtreePartitioner
+    from tiles.recursion import grow_tree
+
+    context = _half_bright_context()
+    policy = StochasticStopPolicy(dark_probability=0.6, bright_probability=0.3, max_level=5)
+
+    def boxes(seed):
+        return [tile.bbox for tile in grow_tree(context, QuadtreePartitioner(), policy, seed=seed)]
+
+    assert boxes(7) == boxes(7)
+    assert any(boxes(seed) != boxes(7) for seed in range(8, 16))
+
+
+def test_combinators_forward_the_generator():
+    from tiles import AllOf, AnyOf, StochasticStopPolicy
+
+    policy = StochasticStopPolicy(dark_probability=1.0, bright_probability=1.0, max_level=9)
+    region = Region(SQUARE, level=1)
+    for combination in (AnyOf(policy), AllOf(policy)):
+        assert combination.should_stop(region, _stats(), np.random.default_rng(0))
+
+
+def _two_pixel_stats(first, second):
+    from tiles.statistics import RegionAnalysis
+
+    context = prepare_image(Image.fromarray(np.array([[first, second]], dtype=np.uint8)))
+    polygon = np.array([[0, 0], [2, 0], [2, 1], [0, 1]], dtype=float)
+    return RegionAnalysis(context, Region(polygon)).stats
+
+
+def test_perceptual_policy_error_is_the_oklab_rms_distance():
+    from tiles import PerceptualUniformityPolicy
+
+    black_white = _two_pixel_stats((0, 0, 0), (255, 255, 255))
+    assert PerceptualUniformityPolicy().error(black_white) == pytest.approx(0.5, abs=1e-3)
+    assert PerceptualUniformityPolicy(lightness_weight=0).error(black_white) == pytest.approx(0.0, abs=1e-3)
+    assert PerceptualUniformityPolicy().error(_two_pixel_stats((7, 8, 9), (7, 8, 9))) == pytest.approx(0.0)
+
+
+def test_perceptual_policy_decisions():
+    from tiles import PerceptualUniformityPolicy
+
+    region = Region(SQUARE)
+    near = _two_pixel_stats((100, 100, 100), (102, 100, 100))
+    far = _two_pixel_stats((0, 0, 0), (255, 255, 255))
+    policy = PerceptualUniformityPolicy(tolerance=0.05)
+    assert policy.should_stop(region, near)
+    assert not policy.should_stop(region, far)
+    assert PerceptualUniformityPolicy(tolerance=0.6).should_stop(region, far)
+    assert policy.should_stop(region, _stats(visible_pixel_count=0))
+
+
+@pytest.mark.parametrize("kwargs", [{"tolerance": -1}, {"lightness_weight": -1}])
+def test_perceptual_policy_validates_arguments(kwargs):
+    from tiles import PerceptualUniformityPolicy
+
+    with pytest.raises(ValueError):
+        PerceptualUniformityPolicy(**kwargs)
+
+
+def test_perceptual_policy_end_to_end_keeps_flat_areas_large():
+    from tiles import AnyOf, MaxLevelPolicy, PerceptualUniformityPolicy
+
+    pixels = np.full((64, 64, 3), 120, dtype=np.uint8)
+    pixels[:, 32:] = np.random.default_rng(0).integers(0, 256, (64, 32, 3), dtype=np.uint8)
+    context = prepare_image(Image.fromarray(pixels))
+
+    tiles = _grow(context, AnyOf(PerceptualUniformityPolicy(tolerance=0.05), MaxLevelPolicy(3)))
+    assert {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] < 32} == {32}
+    assert {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] > 32} == {8}
