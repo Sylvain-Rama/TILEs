@@ -165,7 +165,7 @@ def _reference_stats(context, left, top, right, bottom):
 
 @pytest.mark.parametrize("seed", range(5))
 def test_summed_area_stats_match_pixel_slice(seed):
-    from tiles.input import prepare_image
+    from tiles.IO import prepare_image
     from tiles.statistics import RegionAnalysis
 
     rng = np.random.default_rng(seed)
@@ -191,7 +191,7 @@ def test_summed_area_stats_match_pixel_slice(seed):
 
 
 def test_constant_region_has_zero_deviation():
-    from tiles.input import prepare_image
+    from tiles.IO import prepare_image
     from tiles.statistics import RegionAnalysis
 
     context = prepare_image(Image.new("RGB", (64, 64), (123, 45, 67)))
@@ -238,7 +238,7 @@ def test_summed_area_tables_do_not_change_results(monkeypatch, run):
 
 def test_integral_image_is_skipped_for_huge_images(monkeypatch):
     from tiles import integral
-    from tiles.input import prepare_image
+    from tiles.IO import prepare_image
 
     monkeypatch.setattr(integral, "INTEGRAL_MAX_PIXELS", 10)
     assert prepare_image(Image.new("RGB", (8, 8))).integral is None

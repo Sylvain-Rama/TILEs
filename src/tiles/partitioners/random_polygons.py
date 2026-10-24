@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..input import prepare_image
+from ..input_output import load_images
 from ..protocols import RepresentativeColorPolicy
 from ..recursion import extract_tile
 from ..statistics import RegionAnalysis
@@ -54,16 +54,14 @@ def generate_random_polygons(
 
 
 def random_polygons(
-    image,
+    context: ImageContext,
     *,
     count: int = 100,
     corners: int = 3,
     distance: float = 10,
-    heightmap=None,
     rng: np.random.Generator | None = None,
     color_policy: RepresentativeColorPolicy | None = None,
 ) -> TileSet:
-    context = prepare_image(image, heightmap)
     return generate_random_polygons(
         context,
         count=count,

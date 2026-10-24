@@ -5,14 +5,14 @@ from typing import Any
 
 import numpy as np
 
-from .input import prepare_image
+from .geometry import root_region
 from .partitioners.quadtree import QuadtreePartitioner
 from .partitioners.random_polygons import random_polygons
 from .partitioners.slicing import SlicePartitioner
 from .partitioners.voronoi import VoronoiPartitioner
 from .protocols import RepresentativeColorPolicy
 from .recursion import ThresholdPolicy, grow_tree
-from .types import Region, Tile
+from .types import ImageContext, Tile
 
 
 class LazyTileImages(Sequence):
@@ -49,97 +49,83 @@ def tiles_to_legacy_dict(tiles: Iterable[Tile], *, include_images: bool = False)
     return result
 
 
-def _root_region(width: int, height: int, first_poly=None) -> Region:
-    polygon = first_poly
-    if polygon is None:
-        polygon = np.asarray([[0, 0], [width, 0], [width, height], [0, height]], dtype=float)
-    return Region(np.asarray(polygon, dtype=float))
-
-
 def quadtree(
-    img,
+    context: ImageContext,
     std_thr=40,
-    heightmap=None,
     max_level=6,
     rng=None,
     *,
     color_policy: RepresentativeColorPolicy | None = None,
 ):
-    context = prepare_image(img, heightmap)
     height, width = context.rgba.shape[:2]
     tiles = grow_tree(
         context,
         partitioner=QuadtreePartitioner(),
         stop_policy=ThresholdPolicy(std_thr, max_level),
         color_policy=color_policy,
-        root=_root_region(width, height),
+        root=root_region(width, height),
         rng=np.random.default_rng() if rng is None else rng,
     )
     return tiles_to_legacy_dict(tiles)
 
 
 def recursive_slice(
-    img,
-    heightmap=None,
+    context: ImageContext,
     std_thr=40,
     max_level=7,
     rng=None,
     *,
     color_policy: RepresentativeColorPolicy | None = None,
 ):
-    context = prepare_image(img, heightmap)
     height, width = context.rgba.shape[:2]
     tiles = grow_tree(
         context,
         partitioner=SlicePartitioner(),
         stop_policy=ThresholdPolicy(std_thr, max_level, heightmap_threshold=0.2, heightmap_decay=0.01),
         color_policy=color_policy,
-        root=_root_region(width, height),
+        root=root_region(width, height),
         rng=np.random.default_rng() if rng is None else rng,
     )
     return tiles_to_legacy_dict(tiles)
 
 
 def voronoitree(
-    img,
+    context: ImageContext,
     npoints=10,
     max_level=6,
     std_thr=40,
-    heightmap=None,
     first_poly=None,
     rng=None,
     *,
     color_policy: RepresentativeColorPolicy | None = None,
 ):
-    context = prepare_image(img, heightmap)
     height, width = context.rgba.shape[:2]
     tiles = grow_tree(
         context,
         partitioner=VoronoiPartitioner(npoints),
         stop_policy=ThresholdPolicy(std_thr, max_level),
         color_policy=color_policy,
-        root=_root_region(width, height, first_poly),
+        root=root_region(width, height, first_poly),
         rng=np.random.default_rng() if rng is None else rng,
     )
     return tiles_to_legacy_dict(tiles, include_images=True)
 
 
 def throw_polys(
-    img,
+    context: ImageContext,
     n_points=100,
     n_corners=3,
     distance=10,
-    heightmap=None,
     rng=None,
     *,
     color_policy: RepresentativeColorPolicy | None = None,
 ):
     tiles = random_polygons(
-        img,
+        context,
         count=n_points,
         corners=n_corners,
         distance=distance,
-        heightmap=heightmap,
+        heightmap=context.heightmap,
         rng=np.random.default_rng() if rng is None else rng,
         color_policy=color_policy,
     )

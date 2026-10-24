@@ -1,5 +1,5 @@
 from .colors import DominantColorPolicy, MeanRGBColorPolicy, MedianRGBColorPolicy, OKLabChromaColorPolicy
-from .input import prepare_image
+from .input_output import load_images
 from .legacy import quadtree, recursive_slice, throw_polys, voronoitree
 from .protocols import RepresentativeColorPolicy
 from .types import ImageContext, Region, RegionStats, RGBColor, Tile, TileSet
@@ -16,7 +16,7 @@ __all__ = [
     "RepresentativeColorPolicy",
     "Tile",
     "TileSet",
-    "prepare_image",
+    "load_images",
     "quadtree",
     "recursive_slice",
     "throw_polys",

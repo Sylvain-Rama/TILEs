@@ -5,6 +5,8 @@ import math
 import numpy as np
 from shapely.geometry import Polygon
 
+from .types import Region
+
 
 def polygon_bbox(polygon: np.ndarray, width: int, height: int) -> tuple[int, int, int, int]:
     xs = polygon[:, 0]
@@ -67,3 +69,10 @@ def as_polygon(points: np.ndarray) -> Polygon:
     if not polygon.is_valid:
         polygon = polygon.buffer(0)
     return polygon
+
+
+def root_region(width: int, height: int, first_poly=None) -> Region:
+    polygon = first_poly
+    if polygon is None:
+        polygon = np.asarray([[0, 0], [width, 0], [width, height], [0, height]], dtype=float)
+    return Region(np.asarray(polygon, dtype=float))

@@ -17,6 +17,8 @@ class ImageContext:
     rgba: np.ndarray
     heightmap: np.ndarray
     size: tuple[int, int]
+    image_path: str
+    heightmap_path: str | None
 
     @cached_property
     def integral(self) -> IntegralImage | None:
@@ -65,6 +67,7 @@ class Tile:
 @dataclass(frozen=True)
 class TileSet:
     tiles: tuple[Tile, ...]
+    seed: int | None = None
 
     def __len__(self) -> int:
         return len(self.tiles)
