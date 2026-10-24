@@ -53,7 +53,6 @@ def quadtree(
     context: ImageContext,
     std_thr=40,
     max_level=6,
-    rng=None,
     *,
     color_policy: RepresentativeColorPolicy | None = None,
 ):
@@ -64,7 +63,6 @@ def quadtree(
         stop_policy=ThresholdPolicy(std_thr, max_level),
         color_policy=color_policy,
         root=root_region(width, height),
-        rng=np.random.default_rng() if rng is None else rng,
     )
     return tiles_to_legacy_dict(tiles)
 
@@ -73,8 +71,6 @@ def recursive_slice(
     context: ImageContext,
     std_thr=40,
     max_level=7,
-    rng=None,
-    *,
     color_policy: RepresentativeColorPolicy | None = None,
 ):
     height, width = context.rgba.shape[:2]
@@ -84,7 +80,6 @@ def recursive_slice(
         stop_policy=ThresholdPolicy(std_thr, max_level, heightmap_threshold=0.2, heightmap_decay=0.01),
         color_policy=color_policy,
         root=root_region(width, height),
-        rng=np.random.default_rng() if rng is None else rng,
     )
     return tiles_to_legacy_dict(tiles)
 
@@ -95,8 +90,6 @@ def voronoitree(
     max_level=6,
     std_thr=40,
     first_poly=None,
-    rng=None,
-    *,
     color_policy: RepresentativeColorPolicy | None = None,
 ):
     height, width = context.rgba.shape[:2]
@@ -106,7 +99,6 @@ def voronoitree(
         stop_policy=ThresholdPolicy(std_thr, max_level),
         color_policy=color_policy,
         root=root_region(width, height, first_poly),
-        rng=np.random.default_rng() if rng is None else rng,
     )
     return tiles_to_legacy_dict(tiles, include_images=True)
 
@@ -116,17 +108,15 @@ def throw_polys(
     n_points=100,
     n_corners=3,
     distance=10,
-    rng=None,
-    *,
     color_policy: RepresentativeColorPolicy | None = None,
 ):
+    rng = np.random.default_rng()
     tiles = random_polygons(
         context,
         count=n_points,
         corners=n_corners,
         distance=distance,
-        heightmap=context.heightmap,
-        rng=np.random.default_rng() if rng is None else rng,
+        rng=rng,
         color_policy=color_policy,
     )
     return tiles_to_legacy_dict(tiles)

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..input_output import load_images
 from ..protocols import RepresentativeColorPolicy
 from ..recursion import extract_tile
 from ..statistics import RegionAnalysis

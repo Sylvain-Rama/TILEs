@@ -1,3 +1,6 @@
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -5,8 +8,27 @@ from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 
 import TILEs
-from tiles import DominantColorPolicy, MeanRGBColorPolicy, MedianRGBColorPolicy, OKLabChromaColorPolicy, Region
+from tiles import (
+    DominantColorPolicy,
+    MeanRGBColorPolicy,
+    MedianRGBColorPolicy,
+    OKLabChromaColorPolicy,
+    Region,
+    load_images,
+)
 from tiles.partitioners.voronoi import VoronoiPartitioner
+
+
+def prepare_image(image, heightmap=None):
+    """Build an ImageContext from PIL images through the public file loader."""
+    with tempfile.TemporaryDirectory() as folder:
+        image_path = Path(folder) / "image.png"
+        image.save(image_path)
+        heightmap_path = None
+        if heightmap is not None:
+            heightmap_path = Path(folder) / "heightmap.png"
+            heightmap.save(heightmap_path)
+        return load_images(str(image_path), None if heightmap_path is None else str(heightmap_path))
 
 
 @pytest.fixture
@@ -58,7 +80,7 @@ def image():
     ],
 )
 def test_partitioners_return_aligned_records(image, run):
-    result = run(image)
+    result = run(prepare_image(image))
     lengths = {len(values) for values in result.values()}
     assert len(lengths) == 1
 
@@ -77,7 +99,7 @@ def test_quadtree_accepts_representative_color_policy():
         ],
         dtype=np.uint8,
     )
-    image = Image.fromarray(pixels)
+    image = prepare_image(Image.fromarray(pixels))
 
     result = TILEs.quadtree(
         image,
@@ -96,7 +118,7 @@ def test_default_quadtree_color_remains_legacy_mean():
         ],
         dtype=np.uint8,
     )
-    image = Image.fromarray(pixels)
+    image = prepare_image(Image.fromarray(pixels))
 
     result = TILEs.quadtree(image, max_level=0)
 
@@ -165,7 +187,6 @@ def _reference_stats(context, left, top, right, bottom):
 
 @pytest.mark.parametrize("seed", range(5))
 def test_summed_area_stats_match_pixel_slice(seed):
-    from tiles.IO import prepare_image
     from tiles.statistics import RegionAnalysis
 
     rng = np.random.default_rng(seed)
@@ -191,7 +212,6 @@ def test_summed_area_stats_match_pixel_slice(seed):
 
 
 def test_constant_region_has_zero_deviation():
-    from tiles.IO import prepare_image
     from tiles.statistics import RegionAnalysis
 
     context = prepare_image(Image.new("RGB", (64, 64), (123, 45, 67)))
@@ -220,8 +240,10 @@ def test_rectangle_bounds(polygon, expected):
 @pytest.mark.parametrize(
     "run",
     [
-        lambda: TILEs.quadtree(_transparent_image(64, 64), max_level=4, std_thr=0),
-        lambda: TILEs.recursive_slice(_transparent_image(64, 64), max_level=5, std_thr=0, rng=np.random.default_rng(2)),
+        lambda: TILEs.quadtree(prepare_image(_transparent_image(64, 64)), max_level=4, std_thr=0),
+        lambda: TILEs.recursive_slice(
+            prepare_image(_transparent_image(64, 64)), max_level=5, std_thr=0, rng=np.random.default_rng(2)
+        ),
     ],
     ids=["quadtree", "recursive-slice"],
 )
@@ -238,7 +260,6 @@ def test_summed_area_tables_do_not_change_results(monkeypatch, run):
 
 def test_integral_image_is_skipped_for_huge_images(monkeypatch):
     from tiles import integral
-    from tiles.IO import prepare_image
 
     monkeypatch.setattr(integral, "INTEGRAL_MAX_PIXELS", 10)
     assert prepare_image(Image.new("RGB", (8, 8))).integral is None
@@ -263,7 +284,7 @@ def test_region_mask_is_built_once_per_polygon_region(monkeypatch, policy):
     monkeypatch.setattr(VoronoiPartitioner, "split", counting_split)
 
     result = TILEs.voronoitree(
-        _transparent_image(64, 64),
+        prepare_image(_transparent_image(64, 64)),
         npoints=4,
         max_level=2,
         std_thr=0,
@@ -281,7 +302,7 @@ def test_axis_aligned_partitioners_never_build_a_mask(monkeypatch):
     from tiles import statistics
 
     monkeypatch.setattr(statistics, "_region_mask", lambda *a: pytest.fail("mask built for a rectangle"))
-    image = _transparent_image(64, 64)
+    image = prepare_image(_transparent_image(64, 64))
     TILEs.quadtree(image, max_level=3, std_thr=0, color_policy=MedianRGBColorPolicy())
     TILEs.recursive_slice(image, max_level=4, std_thr=0)
 
@@ -297,7 +318,7 @@ def test_tile_images_are_rendered_lazily(monkeypatch):
     original = recursion.render_tile_image
     monkeypatch.setattr(recursion, "render_tile_image", lambda *a: renders.append(1) or original(*a))
 
-    result = _voronoi(_transparent_image(64, 64))
+    result = _voronoi(prepare_image(_transparent_image(64, 64)))
     assert renders == []
 
     images = result["images"]
@@ -313,7 +334,7 @@ def test_tile_images_are_rendered_lazily(monkeypatch):
 
 def test_lazy_images_match_cropped_reference():
     image = _transparent_image(64, 64)
-    result = _voronoi(image)
+    result = _voronoi(prepare_image(image))
     rgba = np.asarray(image)
 
     for left, top, width, height, tile in zip(
@@ -425,5 +446,5 @@ def test_oklab_out_of_gamut_keeps_channels_valid():
 
 @pytest.mark.parametrize("policy", [OKLabChromaColorPolicy(), DominantColorPolicy()], ids=["oklab", "dominant"])
 def test_vivid_policies_work_in_partitioners(policy):
-    result = TILEs.quadtree(_transparent_image(32, 32), max_level=2, std_thr=0, color_policy=policy)
+    result = TILEs.quadtree(prepare_image(_transparent_image(32, 32)), max_level=2, std_thr=0, color_policy=policy)
     assert len(result["colors"]) == 16
