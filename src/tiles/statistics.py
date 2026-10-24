@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 from functools import cached_property
 
 import numpy as np
@@ -23,9 +24,20 @@ def _region_mask(region: Region, bbox: tuple[int, int, int, int]) -> np.ndarray:
     return np.asarray(mask_image, dtype=bool)
 
 
-def _stats_from_samples(selected: np.ndarray, selected_heightmap: np.ndarray) -> RegionStats:
+def _bbox_size(bbox: tuple[int, int, int, int]) -> tuple[int, int]:
+    left, top, right, bottom = bbox
+    return right - left, bottom - top
+
+
+def _empty_stats(bbox: tuple[int, int, int, int]) -> RegionStats:
+    return replace(_EMPTY_STATS, bbox_size=_bbox_size(bbox))
+
+
+def _stats_from_samples(
+    selected: np.ndarray, selected_heightmap: np.ndarray, bbox: tuple[int, int, int, int]
+) -> RegionStats:
     if selected.size == 0:
-        return _EMPTY_STATS
+        return _empty_stats(bbox)
 
     standard_deviation = float(np.max(np.std(selected, axis=0)))
     color = tuple(np.mean(selected, axis=0).astype(np.uint8).tolist())
@@ -34,6 +46,8 @@ def _stats_from_samples(selected: np.ndarray, selected_heightmap: np.ndarray) ->
         mean_color=color,
         heightmap_max=float(np.max(selected_heightmap)),
         visible_pixel_count=len(selected),
+        heightmap_mean=float(np.mean(selected_heightmap)),
+        bbox_size=_bbox_size(bbox),
     )
 
 
@@ -45,7 +59,7 @@ def _rectangle_stats(context: ImageContext, bbox: tuple[int, int, int, int]) -> 
     left, top, right, bottom = bbox
     count, sums, square_sums = integral.box_sums(left, top, right, bottom)
     if count == 0:
-        return _EMPTY_STATS
+        return _empty_stats(bbox)
 
     # Plain floats: this runs once per tree node, where numpy call overhead dominates.
     means = [total / count for total in sums]
@@ -55,6 +69,8 @@ def _rectangle_stats(context: ImageContext, bbox: tuple[int, int, int, int]) -> 
         mean_color=(int(means[0]), int(means[1]), int(means[2])),
         heightmap_max=float(context.visible_heightmap[top:bottom, left:right].max()),
         visible_pixel_count=count,
+        heightmap_mean=float(context.masked_heightmap[top:bottom, left:right].sum()) / count,
+        bbox_size=_bbox_size(bbox),
     )
 
 
@@ -106,12 +122,12 @@ class RegionAnalysis:
     @cached_property
     def stats(self) -> RegionStats:
         if self._is_empty:
-            return _EMPTY_STATS
+            return _empty_stats(self.bbox)
         if self._is_rectangle:
             stats = _rectangle_stats(self.context, self.bbox)
             if stats is not None:
                 return stats
-        return _stats_from_samples(*self.samples)
+        return _stats_from_samples(*self.samples, self.bbox)
 
     def representative_color(self, policy: RepresentativeColorPolicy) -> RGBColor:
         selected, _ = self.samples

@@ -1,28 +1,12 @@
-from dataclasses import dataclass
 from functools import partial
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .geometry import translate_polygon, root_region
+from .geometry import root_region, translate_polygon
 from .protocols import Partitioner, RepresentativeColorPolicy, StopPolicy
 from .statistics import RegionAnalysis
-from .types import ImageContext, Region, RegionStats, RGBColor, Tile, TileSet
-
-
-@dataclass(frozen=True)
-class ThresholdPolicy:
-    standard_deviation: float = 40.0
-    max_level: int = 6
-    heightmap_threshold: float = 0.1
-    heightmap_decay: float = 0.1
-
-    def should_stop(self, region: Region, stats: RegionStats) -> bool:
-        return (
-            stats.standard_deviation < self.standard_deviation
-            or region.level >= self.max_level
-            or stats.heightmap_max - region.level * self.heightmap_decay < self.heightmap_threshold
-        )
+from .types import ImageContext, Region, RGBColor, Tile, TileSet
 
 
 def render_tile_image(context: ImageContext, region: Region, bbox: tuple[int, int, int, int]) -> Image.Image:

@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -63,7 +64,6 @@ def image():
                 npoints=5,
                 max_level=1,
                 std_thr=0,
-                rng=np.random.default_rng(1),
                 color_policy=MedianRGBColorPolicy(),
             ),
             id="voronoi-tree",
@@ -72,7 +72,6 @@ def image():
             lambda image: TILEs.throw_polys(
                 image,
                 n_points=3,
-                rng=np.random.default_rng(1),
                 color_policy=MedianRGBColorPolicy(),
             ),
             id="random-polygons",
@@ -241,14 +240,15 @@ def test_rectangle_bounds(polygon, expected):
     "run",
     [
         lambda: TILEs.quadtree(prepare_image(_transparent_image(64, 64)), max_level=4, std_thr=0),
-        lambda: TILEs.recursive_slice(
-            prepare_image(_transparent_image(64, 64)), max_level=5, std_thr=0, rng=np.random.default_rng(2)
-        ),
+        lambda: TILEs.recursive_slice(prepare_image(_transparent_image(64, 64)), max_level=5, std_thr=0),
     ],
     ids=["quadtree", "recursive-slice"],
 )
 def test_summed_area_tables_do_not_change_results(monkeypatch, run):
     from tiles import integral
+
+    # The legacy functions no longer take an rng, so pin the seed grow_tree draws.
+    monkeypatch.setattr(np.random, "SeedSequence", lambda: SimpleNamespace(entropy=2))
 
     with_tables = run()
     monkeypatch.setattr(integral, "INTEGRAL_MAX_PIXELS", 0)
@@ -288,7 +288,6 @@ def test_region_mask_is_built_once_per_polygon_region(monkeypatch, policy):
         npoints=4,
         max_level=2,
         std_thr=0,
-        rng=np.random.default_rng(3),
         color_policy=policy,
     )
     _ = list(result["images"])
@@ -308,7 +307,7 @@ def test_axis_aligned_partitioners_never_build_a_mask(monkeypatch):
 
 
 def _voronoi(image, **kwargs):
-    return TILEs.voronoitree(image, npoints=4, max_level=2, std_thr=0, rng=np.random.default_rng(3), **kwargs)
+    return TILEs.voronoitree(image, npoints=4, max_level=2, std_thr=0, **kwargs)
 
 
 def test_tile_images_are_rendered_lazily(monkeypatch):
@@ -448,3 +447,185 @@ def test_oklab_out_of_gamut_keeps_channels_valid():
 def test_vivid_policies_work_in_partitioners(policy):
     result = TILEs.quadtree(prepare_image(_transparent_image(32, 32)), max_level=2, std_thr=0, color_policy=policy)
     assert len(result["colors"]) == 16
+
+
+# --- stop policies ---
+
+
+def _stats(**overrides):
+    from tiles.types import RegionStats
+
+    values = {
+        "standard_deviation": 10.0,
+        "mean_color": (0, 0, 0),
+        "heightmap_max": 1.0,
+        "visible_pixel_count": 100,
+        "heightmap_mean": 0.5,
+        "bbox_size": (16, 8),
+    }
+    return RegionStats(**{**values, **overrides})
+
+
+def _grow(context, stop_policy):
+    from tiles.partitioners import QuadtreePartitioner
+    from tiles.recursion import grow_tree
+
+    return grow_tree(context, QuadtreePartitioner(), stop_policy, seed=0)
+
+
+def _half_bright_context(gradient=True):
+    """Horizontal colour gradient; heightmap is 0 on the left half and 1 on the right half."""
+    pixels = np.zeros((64, 64, 3), dtype=np.uint8)
+    if gradient:
+        pixels[:] = (np.arange(64) * 4)[None, :, None]
+    heightmap = np.zeros((64, 64), dtype=np.uint8)
+    heightmap[:, 32:] = 255
+    return prepare_image(Image.fromarray(pixels), Image.fromarray(heightmap))
+
+
+@pytest.mark.parametrize("use_tables", [True, False], ids=["tables", "slices"])
+def test_stats_report_heightmap_mean_and_bbox_size(monkeypatch, use_tables):
+    from tiles import integral
+    from tiles.statistics import RegionAnalysis
+
+    if not use_tables:
+        monkeypatch.setattr(integral, "INTEGRAL_MAX_PIXELS", 0)
+    rng = np.random.default_rng(0)
+    context = prepare_image(_transparent_image(), Image.fromarray(rng.integers(0, 256, (30, 40), dtype=np.uint8)))
+
+    for left, top, right, bottom in [(0, 0, 40, 30), (3, 5, 20, 17), (10, 10, 11, 11)]:
+        polygon = np.array([[left, top], [right, top], [right, bottom], [left, bottom]], dtype=float)
+        stats = RegionAnalysis(context, Region(polygon)).stats
+        _, heights = _reference_stats(context, left, top, right, bottom)
+        assert stats.bbox_size == (right - left, bottom - top)
+        if len(heights):
+            assert stats.heightmap_mean == pytest.approx(float(np.mean(heights)))
+
+
+def test_polygon_stats_report_heightmap_mean():
+    from tiles.statistics import RegionAnalysis
+
+    context = _half_bright_context(gradient=False)
+    triangle = np.array([[40, 0], [60, 0], [40, 20]], dtype=float)
+    stats = RegionAnalysis(context, Region(triangle)).stats
+    assert stats.heightmap_mean == 1.0
+    assert stats.bbox_size[0] > 0
+
+
+def test_contrast_policy_tolerance_shrinks_with_heightmap():
+    from tiles import HeightmapContrastPolicy
+
+    policy = HeightmapContrastPolicy(standard_deviation=40, max_level=6)
+    region = Region(SQUARE)
+    assert policy.should_stop(region, _stats(standard_deviation=39, heightmap_mean=0.0))
+    assert not policy.should_stop(region, _stats(standard_deviation=39, heightmap_mean=0.5))
+    assert policy.should_stop(region, _stats(standard_deviation=19, heightmap_mean=0.5))
+    assert not policy.should_stop(region, _stats(standard_deviation=0.1, heightmap_mean=1.0))
+    assert policy.should_stop(region, _stats(standard_deviation=0.0, heightmap_mean=1.0))
+
+
+def test_contrast_policy_gamma_confines_detail_to_bright_areas():
+    from tiles import HeightmapContrastPolicy
+
+    region = Region(SQUARE)
+    stats = _stats(standard_deviation=15, heightmap_mean=0.5)
+    assert HeightmapContrastPolicy(40, gamma=1.0).should_stop(region, stats)  # tolerance 20
+    assert not HeightmapContrastPolicy(40, gamma=3.0).should_stop(region, stats)  # tolerance 5
+
+
+def test_contrast_policy_stops_on_depth_and_transparency():
+    from tiles import HeightmapContrastPolicy
+
+    policy = HeightmapContrastPolicy(standard_deviation=0, max_level=2)
+    assert policy.should_stop(Region(SQUARE, level=2), _stats(standard_deviation=99, heightmap_mean=1.0))
+    assert policy.should_stop(Region(SQUARE), _stats(visible_pixel_count=0))
+
+
+def test_contrast_policy_end_to_end_splits_bright_half_more():
+    from tiles import HeightmapContrastPolicy
+
+    tiles = _grow(_half_bright_context(), HeightmapContrastPolicy(standard_deviation=40, max_level=4))
+    left = [tile for tile in tiles if tile.center[0] < 32]
+    right = [tile for tile in tiles if tile.center[0] > 32]
+    assert {tile.bbox[2] - tile.bbox[0] for tile in left} == {32}
+    assert {tile.bbox[2] - tile.bbox[0] for tile in right} == {4}
+
+
+@pytest.mark.parametrize("kwargs", [{"standard_deviation": -1}, {"gamma": 0}])
+def test_contrast_policy_validates_arguments(kwargs):
+    from tiles import HeightmapContrastPolicy
+
+    with pytest.raises(ValueError):
+        HeightmapContrastPolicy(**kwargs)
+
+
+def test_target_tile_size_interpolates_with_heightmap():
+    from tiles import TargetTileSizePolicy
+
+    policy = TargetTileSizePolicy(max_size=64, min_size=8)
+    assert policy.target_size(0.0) == 64
+    assert policy.target_size(1.0) == 8
+    assert policy.target_size(0.5) == 36
+    assert TargetTileSizePolicy(64, 8, gamma=2).target_size(0.5) == 8 + 56 * 0.25
+
+
+def test_target_tile_size_stops_on_longest_side():
+    from tiles import TargetTileSizePolicy
+
+    policy = TargetTileSizePolicy(max_size=20, min_size=10)
+    region = Region(SQUARE)
+    assert policy.should_stop(region, _stats(bbox_size=(15, 15), heightmap_mean=0.5))
+    assert not policy.should_stop(region, _stats(bbox_size=(5, 16), heightmap_mean=0.5))
+    assert policy.should_stop(region, _stats(visible_pixel_count=0, bbox_size=(99, 99)))
+
+
+def test_target_tile_size_end_to_end_follows_heightmap():
+    from tiles import TargetTileSizePolicy
+
+    tiles = _grow(_half_bright_context(gradient=False), TargetTileSizePolicy(max_size=64, min_size=8))
+    sizes = {side for tile in tiles for side in (tile.bbox[2] - tile.bbox[0], tile.bbox[3] - tile.bbox[1])}
+    left = {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] < 32}
+    right = {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] > 32}
+    assert left == {32}
+    assert right == {8}
+    assert sizes == {8, 32}
+
+
+@pytest.mark.parametrize(
+    "kwargs", [{"max_size": 10, "min_size": 0}, {"max_size": 5, "min_size": 10}, {"max_size": 9, "gamma": -1}]
+)
+def test_target_tile_size_validates_arguments(kwargs):
+    from tiles import TargetTileSizePolicy
+
+    with pytest.raises(ValueError):
+        TargetTileSizePolicy(**kwargs)
+
+
+def test_policy_combinators():
+    from tiles import AllOf, AnyOf, MaxLevelPolicy, UniformColorPolicy
+
+    region = Region(SQUARE, level=3)
+    flat, deep = UniformColorPolicy(5), MaxLevelPolicy(3)
+    noisy = _stats(standard_deviation=50)
+
+    assert AnyOf(flat, deep).should_stop(region, noisy)
+    assert not AllOf(flat, deep).should_stop(region, noisy)
+    assert AllOf(flat, deep).should_stop(region, _stats(standard_deviation=1))
+    assert not AnyOf(flat, deep).should_stop(Region(SQUARE, level=1), noisy)
+    with pytest.raises(ValueError):
+        AnyOf()
+
+
+def test_target_size_with_flat_regions_through_any_of():
+    from tiles import AnyOf, TargetTileSizePolicy, UniformColorPolicy
+
+    pixels = np.zeros((64, 64, 3), dtype=np.uint8)
+    pixels[:, 32:] = (np.arange(32) * 8)[None, :, None]
+    context = prepare_image(Image.fromarray(pixels), Image.new("L", (64, 64), 255))
+    policy = AnyOf(TargetTileSizePolicy(max_size=64, min_size=8), UniformColorPolicy(0))
+
+    tiles = list(_grow(context, policy))
+    flat = [tile for tile in tiles if tile.center[0] < 32]
+    detailed = [tile for tile in tiles if tile.center[0] > 32]
+    assert {tile.bbox[2] - tile.bbox[0] for tile in flat} == {32}
+    assert {tile.bbox[2] - tile.bbox[0] for tile in detailed} == {8}

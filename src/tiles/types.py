@@ -33,6 +33,14 @@ class ImageContext:
             return self.heightmap
         return np.where(visible, self.heightmap, -np.inf)
 
+    @cached_property
+    def masked_heightmap(self) -> np.ndarray:
+        """Heightmap with 0 on transparent pixels, so a plain sum only counts visible ones."""
+        visible = self.rgba[:, :, 3] != 0
+        if visible.all():
+            return self.heightmap
+        return np.where(visible, self.heightmap, 0.0)
+
 
 @dataclass(frozen=True)
 class Region:
@@ -47,6 +55,8 @@ class RegionStats:
     mean_color: RGBColor
     heightmap_max: float
     visible_pixel_count: int
+    heightmap_mean: float = 0.0
+    bbox_size: tuple[int, int] = (0, 0)
 
 
 @dataclass
