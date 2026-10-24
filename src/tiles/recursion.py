@@ -4,7 +4,7 @@ from functools import partial
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .geometry import translate_polygon
+from .geometry import translate_polygon, root_region
 from .protocols import Partitioner, RepresentativeColorPolicy, StopPolicy
 from .statistics import RegionAnalysis
 from .types import ImageContext, Region, RegionStats, RGBColor, Tile, TileSet
@@ -64,25 +64,17 @@ def grow_tree(
     stop_policy: StopPolicy,
     color_policy: RepresentativeColorPolicy | None = None,
     root: Region | None = None,
-    rng: np.random.Generator | None = None,
+    seed: float | None = None,
 ) -> TileSet:
     tiles: list[Tile] = []
 
     if root is None:
-        root = Region(
-            polygon=np.array(
-                [
-                    [0, 0],
-                    [context.rgba.shape[1], 0],
-                    [context.rgba.shape[1], context.rgba.shape[0]],
-                    [0, context.rgba.shape[0]],
-                ]
-            ),
-            level=0,
-        )
+        root = root_region(context.size[0], context.size[1])
 
-    if rng is None:
-        rng = np.random.default_rng()
+    if seed is None:
+        seed = np.random.SeedSequence().entropy
+
+    rng = np.random.default_rng(seed)
 
     def add_tile(region: Region, analysis: RegionAnalysis) -> None:
         color = analysis.stats.mean_color if color_policy is None else analysis.representative_color(color_policy)
@@ -102,4 +94,4 @@ def grow_tree(
             visit(child)
 
     visit(root)
-    return TileSet(tuple(tiles))
+    return TileSet(tuple(tiles), seed=seed)
