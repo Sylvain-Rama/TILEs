@@ -438,7 +438,7 @@ def test_dominant_color_validates_bits(bits):
 
 
 def _oklab_chroma(rgb):
-    from tiles.colors import srgb_to_oklab
+    from tiles.color_policies import srgb_to_oklab
 
     lab = srgb_to_oklab(np.array(rgb, dtype=float))
     return float(np.hypot(lab[1], lab[2]))
@@ -488,7 +488,7 @@ def test_oklab_chroma_policy_validates_vividness(vividness):
 
 
 def test_oklab_round_trip():
-    from tiles.colors import oklab_to_srgb, srgb_to_oklab
+    from tiles.color_policies import oklab_to_srgb, srgb_to_oklab
 
     rng = np.random.default_rng(0)
     for rgb in rng.integers(0, 256, size=(100, 3)):
@@ -496,7 +496,7 @@ def test_oklab_round_trip():
 
 
 def test_oklab_out_of_gamut_keeps_channels_valid():
-    from tiles.colors import oklab_to_srgb
+    from tiles.color_policies import oklab_to_srgb
 
     color = oklab_to_srgb(np.array([0.7, 0.4, 0.3]))
     assert all(0 <= channel <= 255 for channel in color)
@@ -768,7 +768,7 @@ def test_polygon_stats_report_heightmap_min():
 
 @pytest.mark.parametrize("as_polygon", [False, True], ids=["rectangle", "polygon"])
 def test_oklab_variance_matches_reference(as_polygon):
-    from tiles.colors import srgb_to_oklab
+    from tiles.color_policies import srgb_to_oklab
     from tiles.statistics import RegionAnalysis
 
     context = prepare_image(_transparent_image())

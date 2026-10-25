@@ -5,7 +5,7 @@ from functools import cached_property
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .colors import srgb_to_oklab
+from .color_policies import srgb_to_oklab
 from .geometry import bounds_bbox, polygon_bbox, polygon_center, rectangle_bounds, translate_polygon
 from .protocols import RepresentativeColorPolicy
 from .types import ImageContext, Region, RegionStats, RGBColor, Tile, TileSet

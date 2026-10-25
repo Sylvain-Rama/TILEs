@@ -1,9 +1,9 @@
-from .colors import (
-    DominantColorPolicy,
-    MeanRGBColorPolicy,
-    MedianRGBColorPolicy,
-    MostSaturatedColorPolicy,
-    OKLabChromaColorPolicy,
+from .color_policies import (
+    DominantColor,
+    MeanRGBColor,
+    MedianRGBColor,
+    MostSaturatedColor,
+    OKLabChromaColor,
 )
 from .input_output import load_images, save_tileset, tileset_to_figure
 from .legacy import quadtree, recursive_slice, throw_polys, voronoitree
@@ -26,15 +26,15 @@ from .types import ImageContext, Region, RegionStats, RGBColor, Tile, TileSet
 __all__ = [
     "AllOf",
     "AnyOf",
-    "DominantColorPolicy",
+    "DominantColor",
     "HeightmapContrastStop",
     "HeightmapRangeStop",
     "ImageContext",
     "MaxLevelStop",
-    "MeanRGBColorPolicy",
-    "MedianRGBColorPolicy",
-    "MostSaturatedColorPolicy",
-    "OKLabChromaColorPolicy",
+    "MeanRGBColor",
+    "MedianRGBColor",
+    "MostSaturatedColor",
+    "OKLabChromaColor",
     "PerceptualUniformityStop",
     "RGBColor",
     "Region",

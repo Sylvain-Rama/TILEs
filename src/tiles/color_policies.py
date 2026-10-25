@@ -10,13 +10,19 @@ def _validate_rgb_pixels(rgb_pixels: np.ndarray) -> None:
         raise ValueError("RGB pixels must be a non-empty array with shape (n, 3)")
 
 
-class MeanRGBColorPolicy:
+class MeanRGBColor:
+    def __repr__(self) -> str:
+        return "MeanRGBColor()"
+
     def representative_color(self, rgb_pixels: np.ndarray) -> RGBColor:
         _validate_rgb_pixels(rgb_pixels)
         return tuple(np.rint(np.mean(rgb_pixels, axis=0)).astype(np.uint8).tolist())
 
 
-class MedianRGBColorPolicy:
+class MedianRGBColor:
+    def __repr__(self) -> str:
+        return "MedianRGBColor()"
+
     def representative_color(self, rgb_pixels: np.ndarray) -> RGBColor:
         _validate_rgb_pixels(rgb_pixels)
         return tuple(np.rint(np.median(rgb_pixels, axis=0)).astype(np.uint8).tolist())
@@ -85,7 +91,7 @@ def oklab_to_srgb(lab: np.ndarray) -> RGBColor:
     return (int(srgb[0]), int(srgb[1]), int(srgb[2]))
 
 
-class OKLabChromaColorPolicy:
+class OKLabChromaColor:
     """Mean colour in OKLab, with chroma pulled back towards the pixels' mean chroma.
 
     Averaging differently coloured pixels gives a colour greyer than any of them. This policy keeps
@@ -115,8 +121,11 @@ class OKLabChromaColorPolicy:
         scale = (mean_chroma / direction) ** self.vividness
         return oklab_to_srgb(np.array([lightness, mean_a * scale, mean_b * scale]))
 
+    def __repr__(self) -> str:
+        return f"OKLabChromaColor(vividness={self.vividness})"
 
-class DominantColorPolicy:
+
+class DominantColor:
     """Mean of the pixels in the most populated colour bin.
 
     Pixels are quantised to ``bits`` bits per channel. Only the most frequent bin contributes, so
@@ -141,8 +150,11 @@ class DominantColorPolicy:
         color = np.rint(pixels[bins == dominant].mean(axis=0)).astype(np.uint8)
         return (int(color[0]), int(color[1]), int(color[2]))
 
+    def __repr__(self) -> str:
+        return f"DominantColor(bits={self.bits})"
 
-class MostSaturatedColorPolicy:
+
+class MostSaturatedColor:
     """Colour of the most saturated pixels of the region, so tiles stay vivid without boosting the image.
 
     Saturation is the OKLab chroma, which tracks perceived colourfulness (unlike HSV saturation, it does
@@ -164,3 +176,6 @@ class MostSaturatedColorPolicy:
             chroma = np.hypot(lab[:, 1], lab[:, 2])
             lab = lab[np.argpartition(-chroma, count - 1)[:count]]
         return oklab_to_srgb(lab.mean(axis=0))
+
+    def __repr__(self) -> str:
+        return f"MostSaturatedColor(top_fraction={self.top_fraction})"

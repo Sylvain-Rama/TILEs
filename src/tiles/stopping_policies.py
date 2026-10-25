@@ -27,6 +27,9 @@ class ThresholdStop:
             or stats.heightmap_max - region.level * self.heightmap_decay < self.heightmap_threshold
         )
 
+    def __repr__(self) -> str:
+        return f"ThresholdStop(standard_deviation={self.standard_deviation}, max_level={self.max_level}, heightmap_threshold={self.heightmap_threshold}, heightmap_decay={self.heightmap_decay})"
+
 
 @dataclass(frozen=True)
 class MaxLevelStop:
@@ -37,6 +40,9 @@ class MaxLevelStop:
     def should_stop(self, region: Region, stats: RegionStats, rng: np.random.Generator | None = None) -> bool:
         return region.level >= self.max_level
 
+    def __repr__(self) -> str:
+        return f"MaxLevelStop(max_level={self.max_level})"
+
 
 @dataclass(frozen=True)
 class UniformColorStop:
@@ -46,6 +52,9 @@ class UniformColorStop:
 
     def should_stop(self, region: Region, stats: RegionStats, rng: np.random.Generator | None = None) -> bool:
         return stats.standard_deviation <= self.standard_deviation
+
+    def __repr__(self) -> str:
+        return f"UniformColorStop(standard_deviation={self.standard_deviation})"
 
 
 @dataclass(frozen=True)
@@ -73,6 +82,9 @@ class HeightmapContrastStop:
             return True
         tolerance = self.standard_deviation * (1.0 - min(max(stats.heightmap_mean, 0.0), 1.0)) ** self.gamma
         return stats.standard_deviation <= tolerance
+
+    def __repr__(self) -> str:
+        return f"HeightmapContrastStop(standard_deviation={self.standard_deviation}, max_level={self.max_level}, gamma={self.gamma})"
 
 
 @dataclass(frozen=True)
@@ -103,6 +115,9 @@ class TargetTileSizeStop:
             return True
         return max(stats.bbox_size) <= self.target_size(stats.heightmap_mean)
 
+    def __repr__(self) -> str:
+        return f"TargetTileSizeStop(max_size={self.max_size}, min_size={self.min_size}, gamma={self.gamma})"
+
 
 @dataclass(frozen=True)
 class HeightmapRangeStop:
@@ -121,6 +136,9 @@ class HeightmapRangeStop:
 
     def should_stop(self, region: Region, stats: RegionStats, rng: np.random.Generator | None = None) -> bool:
         return stats.visible_pixel_count == 0 or stats.heightmap_range <= self.max_range
+
+    def __repr__(self) -> str:
+        return f"HeightmapRangeStop(max_range={self.max_range})"
 
 
 @dataclass(frozen=True)
@@ -153,6 +171,9 @@ class StochasticStop:
         h = min(max(heightmap_mean, 0.0), 1.0)
         return self.bright_probability + (self.dark_probability - self.bright_probability) * (1.0 - h) ** self.gamma
 
+    def __repr__(self) -> str:
+        return f"StochasticStop(dark_probability={self.dark_probability}, bright_probability={self.bright_probability}, max_level={self.max_level}, min_level={self.min_level}, gamma={self.gamma})"
+
     def should_stop(self, region: Region, stats: RegionStats, rng: np.random.Generator | None = None) -> bool:
         if stats.visible_pixel_count == 0 or region.level >= self.max_level:
             return True
@@ -182,6 +203,9 @@ class PerceptualUniformityStop:
     tolerance: float = 0.1
     lightness_weight: float = 1.0
     max_level: int = 6
+
+    def __repr__(self) -> str:
+        return f"PerceptualUniformityStop(tolerance={self.tolerance}, lightness_weight={self.lightness_weight}, max_level={self.max_level})"
 
     def __post_init__(self) -> None:
         if self.tolerance < 0:
