@@ -7,45 +7,45 @@ from .colors import (
 )
 from .input_output import load_images, save_tileset, tileset_to_figure
 from .legacy import quadtree, recursive_slice, throw_polys, voronoitree
-from .policies import (
-    AllOf,
-    AnyOf,
-    HeightmapContrastPolicy,
-    HeightmapRangePolicy,
-    MaxLevelPolicy,
-    PerceptualUniformityPolicy,
-    StochasticStopPolicy,
-    TargetTileSizePolicy,
-    ThresholdPolicy,
-    UniformColorPolicy,
-)
 from .protocols import RepresentativeColorPolicy
 from .statistics import recompute_tile_colors
+from .stopping_policies import (
+    AllOf,
+    AnyOf,
+    HeightmapContrastStop,
+    HeightmapRangeStop,
+    MaxLevelStop,
+    PerceptualUniformityStop,
+    StochasticStop,
+    TargetTileSizeStop,
+    ThresholdStop,
+    UniformColorStop,
+)
 from .types import ImageContext, Region, RegionStats, RGBColor, Tile, TileSet
 
 __all__ = [
     "AllOf",
     "AnyOf",
     "DominantColorPolicy",
-    "HeightmapContrastPolicy",
-    "HeightmapRangePolicy",
+    "HeightmapContrastStop",
+    "HeightmapRangeStop",
     "ImageContext",
-    "MaxLevelPolicy",
+    "MaxLevelStop",
     "MeanRGBColorPolicy",
     "MedianRGBColorPolicy",
     "MostSaturatedColorPolicy",
     "OKLabChromaColorPolicy",
-    "PerceptualUniformityPolicy",
+    "PerceptualUniformityStop",
     "RGBColor",
     "Region",
     "RegionStats",
     "RepresentativeColorPolicy",
-    "StochasticStopPolicy",
-    "TargetTileSizePolicy",
-    "ThresholdPolicy",
+    "StochasticStop",
+    "TargetTileSizeStop",
+    "ThresholdStop",
     "Tile",
     "TileSet",
-    "UniformColorPolicy",
+    "UniformColorStop",
     "load_images",
     "quadtree",
     "recompute_tile_colors",

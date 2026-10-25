@@ -7,12 +7,12 @@ import numpy as np
 
 from .geometry import root_region
 from .partitioners.quadtree import QuadtreePartitioner
-from .policies import ThresholdPolicy
 from .partitioners.random_polygons import random_polygons
 from .partitioners.slicing import SlicePartitioner
 from .partitioners.voronoi import VoronoiPartitioner
 from .protocols import RepresentativeColorPolicy
 from .recursion import grow_tree
+from .stopping_policies import ThresholdStop
 from .types import ImageContext, Tile
 
 
@@ -61,7 +61,7 @@ def quadtree(
     tiles = grow_tree(
         context,
         partitioner=QuadtreePartitioner(),
-        stop_policy=ThresholdPolicy(std_thr, max_level),
+        stop_policy=ThresholdStop(std_thr, max_level),
         color_policy=color_policy,
         root=root_region(width, height),
     )
@@ -78,7 +78,7 @@ def recursive_slice(
     tiles = grow_tree(
         context,
         partitioner=SlicePartitioner(),
-        stop_policy=ThresholdPolicy(std_thr, max_level, heightmap_threshold=0.2, heightmap_decay=0.01),
+        stop_policy=ThresholdStop(std_thr, max_level, heightmap_threshold=0.2, heightmap_decay=0.01),
         color_policy=color_policy,
         root=root_region(width, height),
     )
@@ -97,7 +97,7 @@ def voronoitree(
     tiles = grow_tree(
         context,
         partitioner=VoronoiPartitioner(npoints),
-        stop_policy=ThresholdPolicy(std_thr, max_level),
+        stop_policy=ThresholdStop(std_thr, max_level),
         color_policy=color_policy,
         root=root_region(width, height, first_poly),
     )

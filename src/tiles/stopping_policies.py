@@ -14,7 +14,7 @@ from .types import Region, RegionStats
 
 # Legacy threshold-based stop policy
 @dataclass(frozen=True)
-class ThresholdPolicy:
+class ThresholdStop:
     standard_deviation: float = 40.0
     max_level: int = 6
     heightmap_threshold: float = 0.1
@@ -29,7 +29,7 @@ class ThresholdPolicy:
 
 
 @dataclass(frozen=True)
-class MaxLevelPolicy:
+class MaxLevelStop:
     """Stop at a fixed recursion depth."""
 
     max_level: int
@@ -39,7 +39,7 @@ class MaxLevelPolicy:
 
 
 @dataclass(frozen=True)
-class UniformColorPolicy:
+class UniformColorStop:
     """Stop when the colour deviation of a region is at most `standard_deviation`."""
 
     standard_deviation: float = 40.0
@@ -49,7 +49,7 @@ class UniformColorPolicy:
 
 
 @dataclass(frozen=True)
-class HeightmapContrastPolicy:
+class HeightmapContrastStop:
     """Heightmap-modulated colour tolerance.
 
     A region stops splitting once its colour deviation is at most
@@ -76,7 +76,7 @@ class HeightmapContrastPolicy:
 
 
 @dataclass(frozen=True)
-class TargetTileSizePolicy:
+class TargetTileSizeStop:
     """Heightmap-driven tile size, independent of the partitioner and the recursion level.
 
     The target size goes from ``max_size`` pixels where the heightmap is 0 to ``min_size`` where it is 1
@@ -105,7 +105,7 @@ class TargetTileSizePolicy:
 
 
 @dataclass(frozen=True)
-class HeightmapRangePolicy:
+class HeightmapRangeStop:
     """Stop when the heightmap is nearly flat across the region (``max - min <= max_range``).
 
     Regions straddling a heightmap edge or gradient are not flat, so they keep splitting and the
@@ -124,7 +124,7 @@ class HeightmapRangePolicy:
 
 
 @dataclass(frozen=True)
-class StochasticStopPolicy:
+class StochasticStop:
     """Stop at random, more often in dark areas than in bright ones.
 
     Past ``min_level``, a region stops with probability
@@ -159,12 +159,12 @@ class StochasticStopPolicy:
         if region.level < self.min_level:
             return False
         if rng is None:
-            raise ValueError("StochasticStopPolicy needs the random generator passed by grow_tree")
+            raise ValueError("StochasticStop needs the random generator passed by grow_tree")
         return bool(rng.random() < self.stop_probability(stats.heightmap_mean))
 
 
 @dataclass(frozen=True)
-class PerceptualUniformityPolicy:
+class PerceptualUniformityStop:
     """Stop when the colours of a region are perceptually close to each other.
 
     The error is the RMS OKLab distance to the region's mean colour,

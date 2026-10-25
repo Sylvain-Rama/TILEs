@@ -168,6 +168,7 @@ def recompute_tile_colors(
     Tile geometry, rendering sources, and the seed are preserved. When no policy is supplied,
     colors use the same mean-RGB behavior as tile generation without a color policy.
     """
+
     def recolor(tile: Tile) -> Tile:
         analysis = RegionAnalysis(context, tile.region)
         color = analysis.stats.mean_color if policy is None else analysis.representative_color(policy)
