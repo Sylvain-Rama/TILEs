@@ -1,9 +1,10 @@
+import io
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageCms
 
 from .types import ImageContext, TileSet
 
@@ -11,10 +12,33 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
 
+def _to_srgb(image: Image.Image) -> Image.Image:
+    """Convert an RGB image with an embedded ICC profile (e.g. ProPhoto, Adobe RGB) to sRGB.
+
+    Pixel values are otherwise read as sRGB, which desaturates wide-gamut images. The profile is
+    dropped from the result so viewers do not apply it a second time.
+    """
+    icc_profile = image.info.get("icc_profile")
+    if not icc_profile or image.mode not in ("RGB", "RGBA"):
+        return image
+    try:
+        converted = ImageCms.profileToProfile(
+            image,
+            ImageCms.ImageCmsProfile(io.BytesIO(icc_profile)),
+            ImageCms.createProfile("sRGB"),
+            renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            outputMode=image.mode,
+        )
+    except (ImageCms.PyCMSError, OSError):
+        return image
+    converted.info.pop("icc_profile", None)
+    return converted
+
+
 def load_images(image_path: str, heightmap_path: str | None = None, resize: float | None = None) -> ImageContext:
-    image = Image.open(image_path)
+    image = _to_srgb(Image.open(image_path))
     if heightmap_path is not None:
-        heightmap = Image.open(heightmap_path)
+        heightmap = _to_srgb(Image.open(heightmap_path))
         heightmap = heightmap.resize(image.size)
     else:
         # If no heightmap is provided, create a default white heightmap
