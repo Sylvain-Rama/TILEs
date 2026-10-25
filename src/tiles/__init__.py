@@ -5,7 +5,7 @@ from .colors import (
     MostSaturatedColorPolicy,
     OKLabChromaColorPolicy,
 )
-from .input_output import load_images
+from .input_output import load_images, save_tileset, tileset_to_figure
 from .legacy import quadtree, recursive_slice, throw_polys, voronoitree
 from .policies import (
     AllOf,
@@ -20,6 +20,7 @@ from .policies import (
     UniformColorPolicy,
 )
 from .protocols import RepresentativeColorPolicy
+from .statistics import recompute_tile_colors
 from .types import ImageContext, Region, RegionStats, RGBColor, Tile, TileSet
 
 __all__ = [
@@ -47,7 +48,10 @@ __all__ = [
     "UniformColorPolicy",
     "load_images",
     "quadtree",
+    "recompute_tile_colors",
     "recursive_slice",
+    "save_tileset",
     "throw_polys",
+    "tileset_to_figure",
     "voronoitree",
 ]

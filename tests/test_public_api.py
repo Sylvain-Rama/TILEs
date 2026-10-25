@@ -2,6 +2,7 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
+import matplotlib
 import numpy as np
 import pytest
 from PIL import Image
@@ -16,9 +17,14 @@ from tiles import (
     MostSaturatedColorPolicy,
     OKLabChromaColorPolicy,
     Region,
+    Tile,
+    TileSet,
     load_images,
+    recompute_tile_colors,
 )
 from tiles.partitioners.voronoi import VoronoiPartitioner
+
+matplotlib.use("Agg")
 
 
 def prepare_image(image, heightmap=None):
@@ -123,6 +129,58 @@ def test_default_quadtree_color_remains_legacy_mean():
     result = TILEs.quadtree(image, max_level=0)
 
     assert result["colors"] == [(32, 32, 32)]
+
+
+def test_recompute_tile_colors_preserves_tiles_and_applies_policy():
+    pixels = np.array(
+        [
+            [[0, 0, 0], [10, 10, 10]],
+            [[20, 20, 20], [100, 100, 100]],
+        ],
+        dtype=np.uint8,
+    )
+    context = prepare_image(Image.fromarray(pixels))
+    region = Region(np.array([[0, 0], [2, 0], [2, 2], [0, 2]], dtype=float))
+    original = Tile(region, (0, 0, 2, 2), (1.0, 1.0), (255, 0, 0))
+    tile_set = TileSet((original,), seed=42)
+
+    result = recompute_tile_colors(tile_set, context, MedianRGBColorPolicy())
+
+    assert result is not tile_set
+    assert result.seed == 42
+    assert result.tiles[0] is not original
+    assert result.tiles[0].color == (15, 15, 15)
+    assert result.tiles[0].region is original.region
+    assert result.tiles[0].bbox == original.bbox
+    assert result.tiles[0].center == original.center
+    assert result.tiles[0].image_source is original.image_source
+    assert original.color == (255, 0, 0)
+
+
+def test_tileset_can_be_saved_as_png_and_svg(tmp_path):
+    from tiles import save_tileset
+
+    region = Region(np.array([[0, 0], [4, 0], [4, 2], [0, 2]], dtype=float))
+    tile_set = TileSet((Tile(region, (0, 0, 4, 2), (2.0, 1.0), (20, 40, 60)),))
+
+    for suffix in ("png", "svg"):
+        output = tmp_path / f"tiles.{suffix}"
+        save_tileset(tile_set, output, canvas_size=(4, 2), figsize=(2, 1), dpi=100)
+        assert output.stat().st_size > 0
+
+
+def test_tileset_width_preserves_canvas_ratio():
+    from tiles import tileset_to_figure
+
+    region = Region(np.array([[0, 0], [4, 0], [4, 2], [0, 2]], dtype=float))
+    tile_set = TileSet((Tile(region, (0, 0, 4, 2), (2.0, 1.0), (20, 40, 60)),))
+
+    figure = tileset_to_figure(tile_set, canvas_size=(4, 2), width=8)
+
+    assert figure.get_size_inches().tolist() == [8.0, 4.0]
+    import matplotlib.pyplot as plt
+
+    plt.close(figure)
 
 
 SQUARE = np.array([[0, 0], [100, 0], [100, 100], [0, 100]], dtype=float)

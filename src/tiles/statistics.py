@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 from .colors import srgb_to_oklab
 from .geometry import bounds_bbox, polygon_bbox, polygon_center, rectangle_bounds, translate_polygon
 from .protocols import RepresentativeColorPolicy
-from .types import ImageContext, Region, RegionStats, RGBColor
+from .types import ImageContext, Region, RegionStats, RGBColor, Tile, TileSet
 
 _EMPTY_STATS = RegionStats(0.0, (0, 0, 0), 0.0, 0)
 
@@ -156,3 +156,22 @@ def representative_region_color(
 
 def region_stats(context: ImageContext, region: Region) -> RegionStats:
     return RegionAnalysis(context, region).stats
+
+
+def recompute_tile_colors(
+    tile_set: TileSet,
+    context: ImageContext,
+    policy: RepresentativeColorPolicy | None = None,
+) -> TileSet:
+    """Return a tile set with colors recomputed from ``context``.
+
+    Tile geometry, rendering sources, and the seed are preserved. When no policy is supplied,
+    colors use the same mean-RGB behavior as tile generation without a color policy.
+    """
+    def recolor(tile: Tile) -> Tile:
+        analysis = RegionAnalysis(context, tile.region)
+        color = analysis.stats.mean_color if policy is None else analysis.representative_color(policy)
+        return replace(tile, color=color)
+
+    tiles = tuple(recolor(tile) for tile in tile_set)
+    return TileSet(tiles, seed=tile_set.seed)
