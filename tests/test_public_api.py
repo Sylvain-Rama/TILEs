@@ -11,11 +11,11 @@ from shapely.ops import unary_union
 
 import TILEs
 from tiles import (
-    DominantColorPolicy,
-    MeanRGBColorPolicy,
-    MedianRGBColorPolicy,
-    MostSaturatedColorPolicy,
-    OKLabChromaColorPolicy,
+    DominantColor,
+    MeanRGBColor,
+    MedianRGBColor,
+    MostSaturatedColor,
+    OKLabChromaColor,
     Region,
     Tile,
     TileSet,
@@ -52,7 +52,7 @@ def image():
                 image,
                 max_level=1,
                 std_thr=0,
-                color_policy=MedianRGBColorPolicy(),
+                color_policy=MedianRGBColor(),
             ),
             id="quadtree",
         ),
@@ -61,7 +61,7 @@ def image():
                 image,
                 max_level=1,
                 std_thr=0,
-                color_policy=MedianRGBColorPolicy(),
+                color_policy=MedianRGBColor(),
             ),
             id="recursive-slice",
         ),
@@ -71,7 +71,7 @@ def image():
                 npoints=5,
                 max_level=1,
                 std_thr=0,
-                color_policy=MedianRGBColorPolicy(),
+                color_policy=MedianRGBColor(),
             ),
             id="voronoi-tree",
         ),
@@ -79,7 +79,7 @@ def image():
             lambda image: TILEs.throw_polys(
                 image,
                 n_points=3,
-                color_policy=MedianRGBColorPolicy(),
+                color_policy=MedianRGBColor(),
             ),
             id="random-polygons",
         ),
@@ -110,7 +110,7 @@ def test_quadtree_accepts_representative_color_policy():
     result = TILEs.quadtree(
         image,
         max_level=0,
-        color_policy=MedianRGBColorPolicy(),
+        color_policy=MedianRGBColor(),
     )
 
     assert result["colors"] == [(15, 15, 15)]
@@ -144,7 +144,7 @@ def test_recompute_tile_colors_preserves_tiles_and_applies_policy():
     original = Tile(region, (0, 0, 2, 2), (1.0, 1.0), (255, 0, 0))
     tile_set = TileSet((original,), seed=42)
 
-    result = recompute_tile_colors(tile_set, context, MedianRGBColorPolicy())
+    result = recompute_tile_colors(tile_set, context, MedianRGBColor())
 
     assert result is not tile_set
     assert result.seed == 42
@@ -324,7 +324,7 @@ def test_integral_image_is_skipped_for_huge_images(monkeypatch):
     assert prepare_image(Image.new("RGB", (8, 8))).integral is None
 
 
-@pytest.mark.parametrize("policy", [None, MedianRGBColorPolicy()], ids=["default", "median"])
+@pytest.mark.parametrize("policy", [None, MedianRGBColor()], ids=["default", "median"])
 def test_region_mask_is_built_once_per_polygon_region(monkeypatch, policy):
     from tiles import statistics
 
@@ -361,7 +361,7 @@ def test_axis_aligned_partitioners_never_build_a_mask(monkeypatch):
 
     monkeypatch.setattr(statistics, "_region_mask", lambda *a: pytest.fail("mask built for a rectangle"))
     image = prepare_image(_transparent_image(64, 64))
-    TILEs.quadtree(image, max_level=3, std_thr=0, color_policy=MedianRGBColorPolicy())
+    TILEs.quadtree(image, max_level=3, std_thr=0, color_policy=MedianRGBColor())
     TILEs.recursive_slice(image, max_level=4, std_thr=0)
 
 
@@ -410,12 +410,12 @@ def _pixels(*groups):
     return np.array([color for color, count in groups for _ in range(count)], dtype=np.uint8)
 
 
-@pytest.mark.parametrize("policy", [OKLabChromaColorPolicy(), DominantColorPolicy()], ids=["oklab", "dominant"])
+@pytest.mark.parametrize("policy", [OKLabChromaColor(), DominantColor()], ids=["oklab", "dominant"])
 def test_vivid_policies_return_the_colour_of_a_uniform_region(policy):
     assert policy.representative_color(_pixels(((10, 200, 30), 7))) == (10, 200, 30)
 
 
-@pytest.mark.parametrize("policy", [OKLabChromaColorPolicy(), DominantColorPolicy()], ids=["oklab", "dominant"])
+@pytest.mark.parametrize("policy", [OKLabChromaColor(), DominantColor()], ids=["oklab", "dominant"])
 def test_vivid_policies_reject_empty_input(policy):
     with pytest.raises(ValueError):
         policy.representative_color(np.empty((0, 3), dtype=np.uint8))
@@ -423,18 +423,18 @@ def test_vivid_policies_reject_empty_input(policy):
 
 def test_dominant_color_ignores_minority_hues():
     pixels = _pixels(((220, 30, 30), 60), ((20, 40, 230), 40))
-    assert DominantColorPolicy().representative_color(pixels) == (220, 30, 30)
+    assert DominantColor().representative_color(pixels) == (220, 30, 30)
 
 
 def test_dominant_color_averages_within_the_winning_bin():
     pixels = _pixels(((200, 10, 10), 5), ((202, 12, 14), 5), ((0, 0, 255), 3))
-    assert DominantColorPolicy().representative_color(pixels) == (201, 11, 12)
+    assert DominantColor().representative_color(pixels) == (201, 11, 12)
 
 
 @pytest.mark.parametrize("bits", [0, 9])
 def test_dominant_color_validates_bits(bits):
     with pytest.raises(ValueError):
-        DominantColorPolicy(bits=bits)
+        DominantColor(bits=bits)
 
 
 def _oklab_chroma(rgb):
@@ -454,14 +454,14 @@ MIXED_HUES = [
 @pytest.mark.parametrize("groups", MIXED_HUES)
 def test_oklab_chroma_policy_vividness_is_monotonic(groups):
     pixels = _pixels(*groups)
-    chromas = [_oklab_chroma(OKLabChromaColorPolicy(vividness=v).representative_color(pixels)) for v in (0, 0.5, 1)]
+    chromas = [_oklab_chroma(OKLabChromaColor(vividness=v).representative_color(pixels)) for v in (0, 0.5, 1)]
     assert chromas == sorted(chromas)
 
 
 def test_oklab_chroma_policy_restores_chroma_of_mixed_hues():
     pixels = _pixels(((255, 0, 0), 50), ((0, 0, 255), 50))
     plain, default, vivid = (
-        _oklab_chroma(OKLabChromaColorPolicy(vividness=v).representative_color(pixels)) for v in (0, 0.5, 1)
+        _oklab_chroma(OKLabChromaColor(vividness=v).representative_color(pixels)) for v in (0, 0.5, 1)
     )
     assert plain < default < vivid
 
@@ -469,14 +469,14 @@ def test_oklab_chroma_policy_restores_chroma_of_mixed_hues():
 @pytest.mark.parametrize("groups", MIXED_HUES[:2])
 def test_oklab_chroma_policy_is_more_vivid_than_the_srgb_mean(groups):
     pixels = _pixels(*groups)
-    mean = MeanRGBColorPolicy().representative_color(pixels)
-    assert _oklab_chroma(OKLabChromaColorPolicy().representative_color(pixels)) > _oklab_chroma(mean)
+    mean = MeanRGBColor().representative_color(pixels)
+    assert _oklab_chroma(OKLabChromaColor().representative_color(pixels)) > _oklab_chroma(mean)
 
 
 def test_oklab_chroma_policy_does_not_amplify_cancelling_hues():
     pixels = _pixels(((255, 0, 0), 50), ((0, 255, 255), 50))
-    plain = OKLabChromaColorPolicy(vividness=0).representative_color(pixels)
-    default = OKLabChromaColorPolicy().representative_color(pixels)
+    plain = OKLabChromaColor(vividness=0).representative_color(pixels)
+    default = OKLabChromaColor().representative_color(pixels)
     assert _oklab_chroma(default) < 0.5 * _oklab_chroma((255, 0, 0))
     assert _oklab_chroma(plain) <= _oklab_chroma(default)
 
@@ -484,7 +484,7 @@ def test_oklab_chroma_policy_does_not_amplify_cancelling_hues():
 @pytest.mark.parametrize("vividness", [-0.1, 1.1])
 def test_oklab_chroma_policy_validates_vividness(vividness):
     with pytest.raises(ValueError):
-        OKLabChromaColorPolicy(vividness=vividness)
+        OKLabChromaColor(vividness=vividness)
 
 
 def test_oklab_round_trip():
@@ -504,19 +504,19 @@ def test_oklab_out_of_gamut_keeps_channels_valid():
 
 def test_most_saturated_policy_picks_the_most_colourful_pixel():
     pixels = _pixels(((128, 128, 128), 50), ((200, 40, 40), 1), ((150, 120, 110), 20))
-    assert MostSaturatedColorPolicy(top_fraction=0).representative_color(pixels) == (200, 40, 40)
+    assert MostSaturatedColor(top_fraction=0).representative_color(pixels) == (200, 40, 40)
 
 
 def test_most_saturated_policy_ignores_dark_noise():
     # Near-black pixels have a high HSV saturation but almost no chroma.
     pixels = _pixels(((3, 0, 0), 10), ((60, 120, 200), 3))
-    assert MostSaturatedColorPolicy(top_fraction=0).representative_color(pixels) == (60, 120, 200)
+    assert MostSaturatedColor(top_fraction=0).representative_color(pixels) == (60, 120, 200)
 
 
 def test_most_saturated_policy_averages_the_top_fraction():
     pixels = _pixels(((128, 128, 128), 90), ((220, 30, 30), 5), ((200, 50, 50), 5))
-    single = MostSaturatedColorPolicy(top_fraction=0).representative_color(pixels)
-    top_tenth = MostSaturatedColorPolicy(top_fraction=0.1).representative_color(pixels)
+    single = MostSaturatedColor(top_fraction=0).representative_color(pixels)
+    top_tenth = MostSaturatedColor(top_fraction=0.1).representative_color(pixels)
     assert single == (220, 30, 30)
     assert top_tenth != single
     assert 200 <= top_tenth[0] <= 220 and 30 <= top_tenth[1] <= 50
@@ -524,28 +524,28 @@ def test_most_saturated_policy_averages_the_top_fraction():
 
 def test_most_saturated_policy_is_more_vivid_than_the_mean_and_equals_it_at_one():
     pixels = _pixels(((255, 0, 0), 10), ((0, 0, 255), 10), ((128, 128, 128), 30))
-    vivid = MostSaturatedColorPolicy().representative_color(pixels)
-    assert _oklab_chroma(vivid) > _oklab_chroma(MeanRGBColorPolicy().representative_color(pixels))
-    assert MostSaturatedColorPolicy(top_fraction=1).representative_color(pixels) == OKLabChromaColorPolicy(
+    vivid = MostSaturatedColor().representative_color(pixels)
+    assert _oklab_chroma(vivid) > _oklab_chroma(MeanRGBColor().representative_color(pixels))
+    assert MostSaturatedColor(top_fraction=1).representative_color(pixels) == OKLabChromaColor(
         vividness=0
     ).representative_color(pixels)
 
 
 def test_most_saturated_policy_returns_the_colour_of_a_uniform_region():
-    assert MostSaturatedColorPolicy().representative_color(_pixels(((10, 200, 30), 7))) == (10, 200, 30)
+    assert MostSaturatedColor().representative_color(_pixels(((10, 200, 30), 7))) == (10, 200, 30)
 
 
 def test_most_saturated_policy_rejects_empty_input_and_bad_fraction():
     with pytest.raises(ValueError):
-        MostSaturatedColorPolicy().representative_color(np.empty((0, 3), dtype=np.uint8))
+        MostSaturatedColor().representative_color(np.empty((0, 3), dtype=np.uint8))
     for fraction in (-0.1, 1.1):
         with pytest.raises(ValueError):
-            MostSaturatedColorPolicy(top_fraction=fraction)
+            MostSaturatedColor(top_fraction=fraction)
 
 
 @pytest.mark.parametrize(
     "policy",
-    [OKLabChromaColorPolicy(), DominantColorPolicy(), MostSaturatedColorPolicy()],
+    [OKLabChromaColor(), DominantColor(), MostSaturatedColor()],
     ids=["oklab", "dominant", "saturated"],
 )
 def test_vivid_policies_work_in_partitioners(policy):
@@ -617,9 +617,9 @@ def test_polygon_stats_report_heightmap_mean():
 
 
 def test_contrast_policy_tolerance_shrinks_with_heightmap():
-    from tiles import HeightmapContrastPolicy
+    from tiles import HeightmapContrastStop
 
-    policy = HeightmapContrastPolicy(standard_deviation=40, max_level=6)
+    policy = HeightmapContrastStop(standard_deviation=40, max_level=6)
     region = Region(SQUARE)
     assert policy.should_stop(region, _stats(standard_deviation=39, heightmap_mean=0.0))
     assert not policy.should_stop(region, _stats(standard_deviation=39, heightmap_mean=0.5))
@@ -629,26 +629,26 @@ def test_contrast_policy_tolerance_shrinks_with_heightmap():
 
 
 def test_contrast_policy_gamma_confines_detail_to_bright_areas():
-    from tiles import HeightmapContrastPolicy
+    from tiles import HeightmapContrastStop
 
     region = Region(SQUARE)
     stats = _stats(standard_deviation=15, heightmap_mean=0.5)
-    assert HeightmapContrastPolicy(40, gamma=1.0).should_stop(region, stats)  # tolerance 20
-    assert not HeightmapContrastPolicy(40, gamma=3.0).should_stop(region, stats)  # tolerance 5
+    assert HeightmapContrastStop(40, gamma=1.0).should_stop(region, stats)  # tolerance 20
+    assert not HeightmapContrastStop(40, gamma=3.0).should_stop(region, stats)  # tolerance 5
 
 
 def test_contrast_policy_stops_on_depth_and_transparency():
-    from tiles import HeightmapContrastPolicy
+    from tiles import HeightmapContrastStop
 
-    policy = HeightmapContrastPolicy(standard_deviation=0, max_level=2)
+    policy = HeightmapContrastStop(standard_deviation=0, max_level=2)
     assert policy.should_stop(Region(SQUARE, level=2), _stats(standard_deviation=99, heightmap_mean=1.0))
     assert policy.should_stop(Region(SQUARE), _stats(visible_pixel_count=0))
 
 
 def test_contrast_policy_end_to_end_splits_bright_half_more():
-    from tiles import HeightmapContrastPolicy
+    from tiles import HeightmapContrastStop
 
-    tiles = _grow(_half_bright_context(), HeightmapContrastPolicy(standard_deviation=40, max_level=4))
+    tiles = _grow(_half_bright_context(), HeightmapContrastStop(standard_deviation=40, max_level=4))
     left = [tile for tile in tiles if tile.center[0] < 32]
     right = [tile for tile in tiles if tile.center[0] > 32]
     assert {tile.bbox[2] - tile.bbox[0] for tile in left} == {32}
@@ -657,26 +657,26 @@ def test_contrast_policy_end_to_end_splits_bright_half_more():
 
 @pytest.mark.parametrize("kwargs", [{"standard_deviation": -1}, {"gamma": 0}])
 def test_contrast_policy_validates_arguments(kwargs):
-    from tiles import HeightmapContrastPolicy
+    from tiles import HeightmapContrastStop
 
     with pytest.raises(ValueError):
-        HeightmapContrastPolicy(**kwargs)
+        HeightmapContrastStop(**kwargs)
 
 
 def test_target_tile_size_interpolates_with_heightmap():
-    from tiles import TargetTileSizePolicy
+    from tiles import TargetTileSizeStop
 
-    policy = TargetTileSizePolicy(max_size=64, min_size=8)
+    policy = TargetTileSizeStop(max_size=64, min_size=8)
     assert policy.target_size(0.0) == 64
     assert policy.target_size(1.0) == 8
     assert policy.target_size(0.5) == 36
-    assert TargetTileSizePolicy(64, 8, gamma=2).target_size(0.5) == 8 + 56 * 0.25
+    assert TargetTileSizeStop(64, 8, gamma=2).target_size(0.5) == 8 + 56 * 0.25
 
 
 def test_target_tile_size_stops_on_longest_side():
-    from tiles import TargetTileSizePolicy
+    from tiles import TargetTileSizeStop
 
-    policy = TargetTileSizePolicy(max_size=20, min_size=10)
+    policy = TargetTileSizeStop(max_size=20, min_size=10)
     region = Region(SQUARE)
     assert policy.should_stop(region, _stats(bbox_size=(15, 15), heightmap_mean=0.5))
     assert not policy.should_stop(region, _stats(bbox_size=(5, 16), heightmap_mean=0.5))
@@ -684,9 +684,9 @@ def test_target_tile_size_stops_on_longest_side():
 
 
 def test_target_tile_size_end_to_end_follows_heightmap():
-    from tiles import TargetTileSizePolicy
+    from tiles import TargetTileSizeStop
 
-    tiles = _grow(_half_bright_context(gradient=False), TargetTileSizePolicy(max_size=64, min_size=8))
+    tiles = _grow(_half_bright_context(gradient=False), TargetTileSizeStop(max_size=64, min_size=8))
     sizes = {side for tile in tiles for side in (tile.bbox[2] - tile.bbox[0], tile.bbox[3] - tile.bbox[1])}
     left = {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] < 32}
     right = {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] > 32}
@@ -699,17 +699,17 @@ def test_target_tile_size_end_to_end_follows_heightmap():
     "kwargs", [{"max_size": 10, "min_size": 0}, {"max_size": 5, "min_size": 10}, {"max_size": 9, "gamma": -1}]
 )
 def test_target_tile_size_validates_arguments(kwargs):
-    from tiles import TargetTileSizePolicy
+    from tiles import TargetTileSizeStop
 
     with pytest.raises(ValueError):
-        TargetTileSizePolicy(**kwargs)
+        TargetTileSizeStop(**kwargs)
 
 
 def test_policy_combinators():
-    from tiles import AllOf, AnyOf, MaxLevelPolicy, UniformColorPolicy
+    from tiles import AllOf, AnyOf, MaxLevelStop, UniformColorStop
 
     region = Region(SQUARE, level=3)
-    flat, deep = UniformColorPolicy(5), MaxLevelPolicy(3)
+    flat, deep = UniformColorStop(5), MaxLevelStop(3)
     noisy = _stats(standard_deviation=50)
 
     assert AnyOf(flat, deep).should_stop(region, noisy)
@@ -721,12 +721,12 @@ def test_policy_combinators():
 
 
 def test_target_size_with_flat_regions_through_any_of():
-    from tiles import AnyOf, TargetTileSizePolicy, UniformColorPolicy
+    from tiles import AnyOf, TargetTileSizeStop, UniformColorStop
 
     pixels = np.zeros((64, 64, 3), dtype=np.uint8)
     pixels[:, 32:] = (np.arange(32) * 8)[None, :, None]
     context = prepare_image(Image.fromarray(pixels), Image.new("L", (64, 64), 255))
-    policy = AnyOf(TargetTileSizePolicy(max_size=64, min_size=8), UniformColorPolicy(0))
+    policy = AnyOf(TargetTileSizeStop(max_size=64, min_size=8), UniformColorStop(0))
 
     tiles = list(_grow(context, policy))
     flat = [tile for tile in tiles if tile.center[0] < 32]
@@ -797,45 +797,45 @@ def test_oklab_variance_needs_pixel_data():
 
 
 def test_range_policy_stops_on_flat_heightmaps():
-    from tiles import HeightmapRangePolicy
+    from tiles import HeightmapRangeStop
 
-    policy = HeightmapRangePolicy(max_range=0.1)
+    policy = HeightmapRangeStop(max_range=0.1)
     region = Region(SQUARE)
     assert policy.should_stop(region, _stats(heightmap_min=0.95, heightmap_max=1.0))
     assert not policy.should_stop(region, _stats(heightmap_min=0.0, heightmap_max=0.5))
     assert policy.should_stop(region, _stats(visible_pixel_count=0))
     with pytest.raises(ValueError):
-        HeightmapRangePolicy(max_range=-1)
+        HeightmapRangeStop(max_range=-1)
 
 
 def test_range_policy_keeps_heightmap_edges_sharp():
-    from tiles import AllOf, HeightmapRangePolicy, UniformColorPolicy
+    from tiles import AllOf, HeightmapRangeStop, UniformColorStop
 
     pixels = np.full((64, 64, 3), 90, dtype=np.uint8)
     heightmap = np.zeros((64, 64), dtype=np.uint8)
     heightmap[:, 40:] = 255
     context = prepare_image(Image.fromarray(pixels), Image.fromarray(heightmap))
 
-    tiles = list(_grow(context, AllOf(UniformColorPolicy(5), HeightmapRangePolicy(0.1))))
+    tiles = list(_grow(context, AllOf(UniformColorStop(5), HeightmapRangeStop(0.1))))
     widths = {tile.bbox[2] - tile.bbox[0] for tile in tiles}
     assert widths == {32, 16, 8}
     assert not any(tile.bbox[0] < 40 < tile.bbox[2] for tile in tiles)
 
 
 def test_stochastic_policy_probability_follows_heightmap():
-    from tiles import StochasticStopPolicy
+    from tiles import StochasticStop
 
-    policy = StochasticStopPolicy(dark_probability=0.8, bright_probability=0.2)
+    policy = StochasticStop(dark_probability=0.8, bright_probability=0.2)
     assert policy.stop_probability(0.0) == pytest.approx(0.8)
     assert policy.stop_probability(1.0) == pytest.approx(0.2)
     assert policy.stop_probability(0.5) == pytest.approx(0.5)
-    assert StochasticStopPolicy(0.8, 0.2, gamma=2).stop_probability(0.5) == pytest.approx(0.2 + 0.6 * 0.25)
+    assert StochasticStop(0.8, 0.2, gamma=2).stop_probability(0.5) == pytest.approx(0.2 + 0.6 * 0.25)
 
 
 def test_stochastic_policy_respects_levels_and_needs_a_generator():
-    from tiles import StochasticStopPolicy
+    from tiles import StochasticStop
 
-    policy = StochasticStopPolicy(dark_probability=1.0, bright_probability=1.0, max_level=3, min_level=1)
+    policy = StochasticStop(dark_probability=1.0, bright_probability=1.0, max_level=3, min_level=1)
     generator = np.random.default_rng(0)
     assert not policy.should_stop(Region(SQUARE, level=0), _stats(), generator)
     assert policy.should_stop(Region(SQUARE, level=1), _stats(), generator)
@@ -849,28 +849,28 @@ def test_stochastic_policy_respects_levels_and_needs_a_generator():
     "kwargs", [{"dark_probability": 1.5}, {"bright_probability": -0.1}, {"gamma": 0}, {"min_level": -1}]
 )
 def test_stochastic_policy_validates_arguments(kwargs):
-    from tiles import StochasticStopPolicy
+    from tiles import StochasticStop
 
     with pytest.raises(ValueError):
-        StochasticStopPolicy(**kwargs)
+        StochasticStop(**kwargs)
 
 
 def test_stochastic_policy_end_to_end_follows_heightmap():
-    from tiles import StochasticStopPolicy
+    from tiles import StochasticStop
 
-    policy = StochasticStopPolicy(dark_probability=1.0, bright_probability=0.0, max_level=3, min_level=1)
+    policy = StochasticStop(dark_probability=1.0, bright_probability=0.0, max_level=3, min_level=1)
     tiles = _grow(_half_bright_context(gradient=False), policy)
     assert {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] < 32} == {32}
     assert {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] > 32} == {8}
 
 
 def test_stochastic_policy_is_reproducible_from_the_seed():
-    from tiles import StochasticStopPolicy
+    from tiles import StochasticStop
     from tiles.partitioners import QuadtreePartitioner
     from tiles.recursion import grow_tree
 
     context = _half_bright_context()
-    policy = StochasticStopPolicy(dark_probability=0.6, bright_probability=0.3, max_level=5)
+    policy = StochasticStop(dark_probability=0.6, bright_probability=0.3, max_level=5)
 
     def boxes(seed):
         return [tile.bbox for tile in grow_tree(context, QuadtreePartitioner(), policy, seed=seed)]
@@ -880,9 +880,9 @@ def test_stochastic_policy_is_reproducible_from_the_seed():
 
 
 def test_combinators_forward_the_generator():
-    from tiles import AllOf, AnyOf, StochasticStopPolicy
+    from tiles import AllOf, AnyOf, StochasticStop
 
-    policy = StochasticStopPolicy(dark_probability=1.0, bright_probability=1.0, max_level=9)
+    policy = StochasticStop(dark_probability=1.0, bright_probability=1.0, max_level=9)
     region = Region(SQUARE, level=1)
     for combination in (AnyOf(policy), AllOf(policy)):
         assert combination.should_stop(region, _stats(), np.random.default_rng(0))
@@ -897,54 +897,72 @@ def _two_pixel_stats(first, second):
 
 
 def test_perceptual_policy_error_is_the_oklab_rms_distance():
-    from tiles import PerceptualUniformityPolicy
+    from tiles import PerceptualUniformityStop
 
     black_white = _two_pixel_stats((0, 0, 0), (255, 255, 255))
-    assert PerceptualUniformityPolicy().error(black_white) == pytest.approx(0.5, abs=1e-3)
-    assert PerceptualUniformityPolicy(lightness_weight=0).error(black_white) == pytest.approx(0.0, abs=1e-3)
-    assert PerceptualUniformityPolicy().error(_two_pixel_stats((7, 8, 9), (7, 8, 9))) == pytest.approx(0.0)
+    assert PerceptualUniformityStop().error(black_white) == pytest.approx(0.5, abs=1e-3)
+    assert PerceptualUniformityStop(lightness_weight=0).error(black_white) == pytest.approx(0.0, abs=1e-3)
+    assert PerceptualUniformityStop().error(_two_pixel_stats((7, 8, 9), (7, 8, 9))) == pytest.approx(0.0)
 
 
 def test_perceptual_policy_decisions():
-    from tiles import PerceptualUniformityPolicy
+    from tiles import PerceptualUniformityStop
 
     region = Region(SQUARE)
     near = _two_pixel_stats((100, 100, 100), (102, 100, 100))
     far = _two_pixel_stats((0, 0, 0), (255, 255, 255))
-    policy = PerceptualUniformityPolicy(tolerance=0.05)
+    policy = PerceptualUniformityStop(tolerance=0.05)
     assert policy.should_stop(region, near)
     assert not policy.should_stop(region, far)
-    assert PerceptualUniformityPolicy(tolerance=0.6).should_stop(region, far)
+    assert PerceptualUniformityStop(tolerance=0.6).should_stop(region, far)
     assert policy.should_stop(region, _stats(visible_pixel_count=0))
 
 
 def test_perceptual_policy_depth_is_bounded_whatever_the_tolerance():
-    from tiles import PerceptualUniformityPolicy
+    from tiles import PerceptualUniformityStop
 
     noise = np.random.default_rng(0).integers(0, 256, (64, 64, 3), dtype=np.uint8)
     context = prepare_image(Image.fromarray(noise))
 
-    assert len(_grow(context, PerceptualUniformityPolicy(tolerance=0, max_level=3))) == 4**3
-    assert PerceptualUniformityPolicy(tolerance=0, max_level=2).should_stop(
+    assert len(_grow(context, PerceptualUniformityStop(tolerance=0, max_level=3))) == 4**3
+    assert PerceptualUniformityStop(tolerance=0, max_level=2).should_stop(
         Region(SQUARE, level=2), _two_pixel_stats((0, 0, 0), (255, 255, 255))
     )
 
 
 @pytest.mark.parametrize("kwargs", [{"tolerance": -1}, {"lightness_weight": -1}])
 def test_perceptual_policy_validates_arguments(kwargs):
-    from tiles import PerceptualUniformityPolicy
+    from tiles import PerceptualUniformityStop
 
     with pytest.raises(ValueError):
-        PerceptualUniformityPolicy(**kwargs)
+        PerceptualUniformityStop(**kwargs)
 
 
 def test_perceptual_policy_end_to_end_keeps_flat_areas_large():
-    from tiles import AnyOf, MaxLevelPolicy, PerceptualUniformityPolicy
+    from tiles import AnyOf, MaxLevelStop, PerceptualUniformityStop
 
     pixels = np.full((64, 64, 3), 120, dtype=np.uint8)
     pixels[:, 32:] = np.random.default_rng(0).integers(0, 256, (64, 32, 3), dtype=np.uint8)
     context = prepare_image(Image.fromarray(pixels))
 
-    tiles = _grow(context, AnyOf(PerceptualUniformityPolicy(tolerance=0.05), MaxLevelPolicy(3)))
+    tiles = _grow(context, AnyOf(PerceptualUniformityStop(tolerance=0.05), MaxLevelStop(3)))
     assert {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] < 32} == {32}
     assert {tile.bbox[2] - tile.bbox[0] for tile in tiles if tile.center[0] > 32} == {8}
+
+
+def test_load_images_converts_embedded_icc_profile_to_srgb():
+    prophoto = Image.open(Path(__file__).parents[1] / "src" / "images" / "Portrait-3.jpg").info["icc_profile"]
+    image = Image.fromarray(np.full((4, 4, 3), (200, 120, 120), dtype=np.uint8))
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "tagged.png"
+        image.save(path, icc_profile=prophoto)
+        context = load_images(str(path))
+    assert "icc_profile" not in context.image.info
+    red, green, blue = context.rgba[0, 0, :3].astype(int)
+    assert red - green > 80 and red > 200
+
+
+def test_color_policy_repr_uses_new_names():
+    assert repr(MeanRGBColor()) == "MeanRGBColor()"
+    assert repr(OKLabChromaColor(vividness=0.25)) == "OKLabChromaColor(vividness=0.25)"
+    assert repr(DominantColor(bits=3)) == "DominantColor(bits=3)"

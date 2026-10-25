@@ -2,21 +2,21 @@
 
 from dithering import dither
 from tiles import (
-    DominantColorPolicy,
-    MeanRGBColorPolicy,
-    MedianRGBColorPolicy,
-    MostSaturatedColorPolicy,
-    OKLabChromaColorPolicy,
+    DominantColor,
+    MeanRGBColor,
+    MedianRGBColor,
+    MostSaturatedColor,
+    OKLabChromaColor,
     RepresentativeColorPolicy,
 )
 from tiles.legacy import quadtree, recursive_slice, throw_polys, voronoitree
 
 __all__ = [
-    "DominantColorPolicy",
-    "MeanRGBColorPolicy",
-    "MedianRGBColorPolicy",
-    "MostSaturatedColorPolicy",
-    "OKLabChromaColorPolicy",
+    "DominantColor",
+    "MeanRGBColor",
+    "MedianRGBColor",
+    "MostSaturatedColor",
+    "OKLabChromaColor",
     "RepresentativeColorPolicy",
     "dither",
     "quadtree",

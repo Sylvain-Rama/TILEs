@@ -93,7 +93,7 @@ class TargetTileSizeStop:
 
     The target size goes from ``max_size`` pixels where the heightmap is 0 to ``min_size`` where it is 1
     (``gamma`` bends the curve). A region stops once its longest bounding-box side is at most the target.
-    Combine with `UniformColorPolicy` through `AnyOf` to also stop on flat regions.
+    Combine with `UniformColorStop` through `AnyOf` to also stop on flat regions.
     """
 
     max_size: float
@@ -124,7 +124,7 @@ class HeightmapRangeStop:
     """Stop when the heightmap is nearly flat across the region (``max - min <= max_range``).
 
     Regions straddling a heightmap edge or gradient are not flat, so they keep splitting and the
-    edge stays sharp. On its own this ignores colour; ``AllOf(UniformColorPolicy(...), HeightmapRangePolicy(...))``
+    edge stays sharp. On its own this ignores colour; ``AllOf(UniformColorStop(...), HeightmapRangeStop(...))``
     keeps splitting while either the colours or the heightmap vary too much.
     """
 
@@ -149,7 +149,7 @@ class StochasticStop:
     ``bright_probability + (dark_probability - bright_probability) * (1 - h) ** gamma``, ``h`` being its
     mean heightmap value. There is no hard threshold, so the tile sizes change smoothly instead of
     forming bands. Draws come from the generator `grow_tree` seeds, so a seed reproduces the result.
-    This policy is never satisfied by colour alone: combine it with `UniformColorPolicy` through `AnyOf`
+    This policy is never satisfied by colour alone: combine it with `UniformColorStop` through `AnyOf`
     to also stop on flat regions.
     """
 
