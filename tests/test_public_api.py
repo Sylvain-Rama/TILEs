@@ -951,7 +951,7 @@ def test_perceptual_policy_end_to_end_keeps_flat_areas_large():
 
 
 def test_load_images_converts_embedded_icc_profile_to_srgb():
-    prophoto = Image.open(Path(__file__).parents[1] / "src" / "images" / "Portrait-3.jpg").info["icc_profile"]
+    prophoto = Image.open(Path(__file__).parents[1] / "src" / "images" / "portrait.jpg").info["icc_profile"]
     image = Image.fromarray(np.full((4, 4, 3), (200, 120, 120), dtype=np.uint8))
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / "tagged.png"
@@ -959,7 +959,7 @@ def test_load_images_converts_embedded_icc_profile_to_srgb():
         context = load_images(str(path))
     assert "icc_profile" not in context.image.info
     red, green, blue = context.rgba[0, 0, :3].astype(int)
-    assert red - green > 80 and red > 200
+    assert (red, green, blue) == (200, 120, 120)
 
 
 def test_color_policy_repr_uses_new_names():

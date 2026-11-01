@@ -211,6 +211,9 @@ __marimo__/
 .pytest_cache
 
 # Local source output directories
-src/images/
-src/output/
-src/scripts/
+src/images/*
+src/output/*
+src/scripts/*
+
+!src/images/portrait.jpg
+!src/images/hmap.jpg
