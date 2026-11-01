@@ -209,3 +209,14 @@ __marimo__/
 .mypy_cache
 .ruff_cache
 .pytest_cache
+
+# Local source working directories
+src/images/*
+src/output/*
+src/scripts/*
+
+!src/images/portrait.jpg
+!src/images/hmap.jpg
+!src/scripts/tiles_example.ipynb
+!src/output/tiles_color_policies.png
+!src/output/tiles_partitioning.png

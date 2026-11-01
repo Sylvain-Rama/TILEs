@@ -19,11 +19,15 @@ build-backend = "setuptools.build_meta"
 package-dir = {"" = "src"}
 py-modules = ["TILEs"]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [dependency-groups]
 dev = [
     "black",
     "ruff",
     "pyrefly",
+    "pytest",
     "jupyterlab",
     "ipykernel"
 ]

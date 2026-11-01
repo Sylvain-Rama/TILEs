@@ -1,0 +1,115 @@
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from functools import cached_property
+from typing import Any
+
+import numpy as np
+from PIL import Image
+
+from .integral import IntegralImage, build_integral_image
+
+RGBColor = tuple[int, int, int]
+
+
+@dataclass(frozen=True)
+class ImageContext:
+    image: Image.Image
+    rgba: np.ndarray
+    heightmap: np.ndarray
+    size: tuple[int, int]
+    image_path: str
+    heightmap_path: str | None
+
+    @cached_property
+    def integral(self) -> IntegralImage | None:
+        """Summed-area tables for constant-time rectangle statistics; None for very large images."""
+        return build_integral_image(self.rgba)
+
+    @cached_property
+    def visible_heightmap(self) -> np.ndarray:
+        """Heightmap with -inf on transparent pixels, so a plain max ignores them."""
+        visible = self.rgba[:, :, 3] != 0
+        if visible.all():
+            return self.heightmap
+        return np.where(visible, self.heightmap, -np.inf)
+
+    @cached_property
+    def visible_heightmap_min(self) -> np.ndarray:
+        """Heightmap with +inf on transparent pixels, so a plain min ignores them."""
+        visible = self.rgba[:, :, 3] != 0
+        if visible.all():
+            return self.heightmap
+        return np.where(visible, self.heightmap, np.inf)
+
+    @cached_property
+    def masked_heightmap(self) -> np.ndarray:
+        """Heightmap with 0 on transparent pixels, so a plain sum only counts visible ones."""
+        visible = self.rgba[:, :, 3] != 0
+        if visible.all():
+            return self.heightmap
+        return np.where(visible, self.heightmap, 0.0)
+
+
+@dataclass(frozen=True)
+class Region:
+    polygon: np.ndarray
+    level: float = 0
+    parent_id: int | None = None
+
+
+@dataclass(frozen=True)
+class RegionStats:
+    standard_deviation: float
+    mean_color: RGBColor
+    heightmap_max: float
+    visible_pixel_count: int
+    heightmap_mean: float = 0.0
+    bbox_size: tuple[int, int] = (0, 0)
+    heightmap_min: float = 0.0
+    # Computing OKLab variances costs a pass over the pixels, so it only happens if a policy asks.
+    oklab_variance_source: Callable[[], tuple[float, float, float]] | None = field(
+        default=None, repr=False, compare=False
+    )
+
+    @property
+    def heightmap_range(self) -> float:
+        return self.heightmap_max - self.heightmap_min
+
+    @cached_property
+    def oklab_variance(self) -> tuple[float, float, float]:
+        """Variance of the lightness, a and b channels of the visible pixels in OKLab."""
+        if self.oklab_variance_source is None:
+            raise ValueError("These statistics carry no pixel data to compute OKLab variances from")
+        return self.oklab_variance_source()
+
+
+@dataclass
+class Tile:
+    region: Region
+    bbox: tuple[int, int, int, int]
+    center: tuple[float, float]
+    color: RGBColor
+    # Either an image or a callable rendering one; rendering on access keeps tiles light in memory.
+    image_source: Image.Image | Callable[[], Image.Image] | None = None
+
+    @property
+    def image(self) -> Image.Image | None:
+        source = self.image_source
+        return source() if callable(source) else source
+
+
+@dataclass(frozen=True)
+class TileSet:
+    tiles: tuple[Tile, ...]
+    seed: int | None = None
+
+    def __len__(self) -> int:
+        return len(self.tiles)
+
+    def __iter__(self):
+        return iter(self.tiles)
+
+    def as_legacy_dict(self) -> dict[str, list[Any]]:
+        from .legacy import tiles_to_legacy_dict
+
+        return tiles_to_legacy_dict(self.tiles)
