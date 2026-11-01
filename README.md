@@ -74,6 +74,6 @@ Model: [@maleficent_model](https://www.instagram.com/maleficent_model/)
 - Tile images are rendered when accessed, not stored. `Tile.image` re-renders on every access,
   which keeps large tile sets light in memory.
 
-See a [Notebook](https://github.com/Sylvain-Rama/TILEs/blob/main/TILEs%20example.ipynb) for more information.
+See a [Notebook](https://github.com/Sylvain-Rama/TILEs/blob/main/src/scripts/tiles_example.ipynb) for more information.
 
 This was originally written to use with [PILes](https://github.com/Sylvain-Rama/PILes)
