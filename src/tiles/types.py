@@ -53,7 +53,7 @@ class ImageContext:
 @dataclass(frozen=True)
 class Region:
     polygon: np.ndarray
-    level: int = 0
+    level: float = 0
     parent_id: int | None = None
 
 
